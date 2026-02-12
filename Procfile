@@ -1,2 +1,2 @@
-web: gunicorn wsgi:app
-release: python -c "from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all()"
+web: gunicorn wsgi:app --log-file -
+release: python init_railway_db.py
