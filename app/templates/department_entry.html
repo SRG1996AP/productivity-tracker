@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ department }} Productivity Entry</h2>
+<table id="prodTable" border="1">
+    <thead>
+        <tr>
+            <th>No</th>
+            <th>Activity Description</th>
+            <th>Duration (mins)</th>
+            <th>Frequency per Day</th>
+            <th>Output/Report</th>
+            <th>Remarks</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>1</td>
+            <td contenteditable="true"></td>
+            <td contenteditable="true"></td>
+            <td contenteditable="true"></td>
+            <td contenteditable="true"></td>
+            <td contenteditable="true"></td>
+            <td><button onclick="removeRow(this)">Remove</button></td>
+        </tr>
+    </tbody>
+</table>
+<button onclick="addRow()">Add Row</button>
+<button onclick="saveData()">Save</button>
+
+<script src="{{ url_for('static', filename='department.js') }}"></script>
+<script>
+    const department = "{{ department }}";
+</script>
+{% endblock %}
