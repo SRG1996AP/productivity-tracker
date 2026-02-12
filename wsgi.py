@@ -7,6 +7,19 @@ from app.models import Department, User
 
 app = create_app()
 
+# Department data from the Excel file - MUST match local init_db.py
+DEPARTMENTS = [
+    {'name': 'IT - Daily Tracking', 'description': 'Information Technology - Daily operational tracking for systems and applications'},
+    {'name': 'HR - Daily Tracking', 'description': 'Human Resources - Daily tracking for employee processes and requirements'},
+    {'name': 'TA - Daily Tracking', 'description': 'Talent Acquisition - Daily tracking for hiring projects and campaigns'},
+    {'name': 'Finance - Daily Tracking', 'description': 'Finance - Daily tracking for financial operations and transactions'},
+    {'name': 'QA - Daily Tracking', 'description': 'Quality Assurance - Daily tracking for quality audits and standards'},
+    {'name': 'Training - Daily Tracking', 'description': 'Training - Daily tracking for training programs and employee development'},
+    {'name': 'RTA - Daily Tracking', 'description': 'Recruitment - Daily tracking for recruitment and talent management'},
+    {'name': 'Operations Leaders - Daily', 'description': 'Operations Leaders - Daily tracking for operations leadership activities'},
+    {'name': 'Management', 'description': 'Management - Department for administrative and managerial users with access to all dashboards'}
+]
+
 # Ensure database is initialized on startup
 with app.app_context():
     try:
@@ -17,19 +30,13 @@ with app.app_context():
         db.create_all()
         print("Database tables verified/created")
         
-        # Ensure basic departments exist
+        # Ensure departments exist
         if Department.query.count() == 0:
-            departments = [
-                Department(name='IT Support', description='Information Technology Support and Maintenance'),
-                Department(name='Customer Service', description='Customer Relations and Support'),
-                Department(name='Operations', description='Day-to-day Operations Management'),
-                Department(name='Finance', description='Financial Management and Accounting'),
-                Department(name='HR', description='Human Resources Management')
-            ]
-            for dept in departments:
+            for dept_data in DEPARTMENTS:
+                dept = Department(**dept_data)
                 db.session.add(dept)
             db.session.commit()
-            print(f"Created {len(departments)} departments")
+            print(f"Created {len(DEPARTMENTS)} departments")
         
         # Ensure default admin exists
         if User.query.count() == 0:
@@ -37,7 +44,7 @@ with app.app_context():
             admin = User(
                 name='Admin User',
                 employee_id='ADMIN001',
-                department='IT Support',
+                department='Management',
                 login_id='admin',
                 password=hashed_pw,
                 is_admin=True
