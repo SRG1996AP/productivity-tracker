@@ -10,6 +10,7 @@
         </div>
         
         <form method="POST" class="entry-form">
+            {{ form.hidden_tag() }}
             
             <div class="form-group">
                 {{ form.activity_description.label }}

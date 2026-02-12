@@ -13,6 +13,7 @@
         {% endwith %}
         
         <form method="POST" class="login-form">
+            {{ form.hidden_tag() }}
             
             <div class="form-group">
                 <label for="login_id">Login ID</label>
