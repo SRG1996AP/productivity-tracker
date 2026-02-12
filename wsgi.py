@@ -2,8 +2,8 @@
 WSGI entry point for production servers (Gunicorn, Waitress, etc.)
 """
 import os
-from app import create_app, db
-from app.models import Department
+from app import create_app, db, bcrypt
+from app.models import Department, User
 
 app = create_app()
 
@@ -30,6 +30,21 @@ with app.app_context():
                 db.session.add(dept)
             db.session.commit()
             print(f"Created {len(departments)} departments")
+        
+        # Ensure default admin exists
+        if User.query.count() == 0:
+            hashed_pw = bcrypt.generate_password_hash('admin123').decode('utf-8')
+            admin = User(
+                name='Admin User',
+                employee_id='ADMIN001',
+                department='IT Support',
+                login_id='admin',
+                password=hashed_pw,
+                is_admin=True
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("Created default admin user")
     except Exception as e:
         print(f"Warning: Database initialization issue: {e}")
 

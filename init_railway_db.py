@@ -2,8 +2,8 @@
 Initialize database for Railway deployment
 """
 import os
-from app import create_app, db
-from app.models import Department
+from app import create_app, db, bcrypt
+from app.models import Department, User
 
 def init_db():
     """Create all database tables and add initial departments"""
@@ -35,6 +35,23 @@ def init_db():
                 print(f"✓ Created {len(departments)} departments")
             else:
                 print(f"✓ Found {Department.query.count()} existing departments")
+            
+            # Create default admin user if no users exist
+            if User.query.count() == 0:
+                hashed_pw = bcrypt.generate_password_hash('admin123').decode('utf-8')
+                admin = User(
+                    name='Admin User',
+                    employee_id='ADMIN001',
+                    department='IT Support',
+                    login_id='admin',
+                    password=hashed_pw,
+                    is_admin=True
+                )
+                db.session.add(admin)
+                db.session.commit()
+                print("✓ Created default admin user (login: admin, password: admin123)")
+            else:
+                print(f"✓ Found {User.query.count()} existing users")
             
             print("✓ Database initialization complete!")
             return True
