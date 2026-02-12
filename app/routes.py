@@ -862,10 +862,17 @@ def admin_users():
         flash('You do not have access to user management.', 'danger')
         return redirect(url_for('main.management_dashboard'))
     
-    users = User.query.order_by(User.department, User.name).all()
-    departments = Department.query.all()
-    
-    return render_template('admin_users.html', users=users, departments=departments)
+    try:
+        users = User.query.order_by(User.department, User.name).all()
+        departments = Department.query.order_by(Department.name).all()
+        
+        return render_template('admin_users.html', users=users, departments=departments)
+    except Exception as e:
+        print(f"Error in admin_users: {e}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Error loading users: {str(e)}', 'danger')
+        return redirect(url_for('main.management_dashboard'))
 
 
 @main.route('/admin/add-user', methods=['GET', 'POST'])
