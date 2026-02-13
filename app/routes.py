@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, url_for, flash, redirect, session, request, jsonify
+from flask import Blueprint, render_template, url_for, flash, redirect, session, request, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db, bcrypt
 from app.models import User, Department, DepartmentTracking, TrackingField, Grievance, GrievanceAudit, GrievanceAttachment
@@ -7,9 +7,28 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 import uuid
 import re
+import csv
+import io
 
 # Create a Blueprint
 main = Blueprint('main', __name__)
+
+
+def _parse_sla_minutes(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    match = re.search(r"\d+(\.\d+)?", text)
+    if not match:
+        return None
+    number = float(match.group(0))
+    if "hour" in text or "hr" in text or text.endswith("h"):
+        return int(number * 60)
+    return int(number)
 
 # --------------------------
 # Home Route
@@ -180,95 +199,49 @@ def add_department_entry():
     # Use dynamic form based on department configuration
     form = DynamicDepartmentTrackingForm.create_form_for_department(user_dept)
 
+    next_entry_no = DepartmentTracking.query.filter_by(department_id=user_dept.id).count() + 1
     today = datetime.utcnow().date()
-    dept_entries = DepartmentTracking.query.filter(
-        DepartmentTracking.department_id == user_dept.id
-    ).order_by(DepartmentTracking.date_logged.desc())
-
     today_entries = DepartmentTracking.query.filter(
         DepartmentTracking.department_id == user_dept.id,
         func.date(DepartmentTracking.date_logged) == today
     ).all()
-
-    total_entries = dept_entries.count()
-    activity_no = total_entries + 1
-
-    def _parse_sla(sla_value):
-        if not sla_value:
-            return None
-        digits = re.findall(r"\d+", str(sla_value))
-        if not digits:
-            return None
-        try:
-            return int(digits[0])
-        except ValueError:
-            return None
-
     high_priority_count = sum(
         1 for entry in today_entries
-        if (entry.priority or "").lower() in ["high", "urgent"]
+        if (entry.priority or '').lower() in ['high', 'urgent']
     )
-    sla_breached_count = sum(
-        1 for entry in today_entries
-        if entry.duration_mins
-        and _parse_sla(entry.sla_tat)
-        and entry.duration_mins > _parse_sla(entry.sla_tat)
-    )
-
-    date_from = request.args.get("date_from")
-    date_to = request.args.get("date_to")
-    filter_priority = request.args.get("priority")
-    filter_status = request.args.get("status")
-
-    history_entries = dept_entries.limit(100).all()
-
-    def _within_date_range(entry_date):
-        if date_from:
-            try:
-                from_date = datetime.strptime(date_from, "%Y-%m-%d").date()
-                if entry_date < from_date:
-                    return False
-            except ValueError:
-                pass
-        if date_to:
-            try:
-                to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
-                if entry_date > to_date:
-                    return False
-            except ValueError:
-                pass
-        return True
-
-    def _get_output(custom_data):
-        for key in ["output_report", "output_evidence", "output_scorecard"]:
-            value = custom_data.get(key)
-            if value:
-                return value
-        return "-"
-
-    history_rows = []
-    for entry in history_entries:
-        if not _within_date_range(entry.date_logged.date()):
+    sla_breached_count = 0
+    for entry in today_entries:
+        sla_minutes = _parse_sla_minutes(entry.sla_tat)
+        if sla_minutes is None:
             continue
-        if filter_priority and (entry.priority or "").lower() != filter_priority.lower():
-            continue
+        if entry.duration_mins and entry.duration_mins > sla_minutes:
+            sla_breached_count += 1
 
-        custom_data = entry.get_custom_fields_data()
-        status_value = custom_data.get("status") or "-"
-        if filter_status and status_value.lower() != filter_status.lower():
-            continue
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    status_filter = request.args.get('status')
+    priority_filter = request.args.get('priority')
 
-        history_rows.append({
-            "id": entry.id,
-            "date_logged": entry.date_logged,
-            "description": entry.activity_description,
-            "priority": entry.priority,
-            "duration_mins": entry.duration_mins,
-            "status": status_value,
-            "output": _get_output(custom_data),
-            "remarks": custom_data.get("remarks") or "-",
-        })
-    
+    history_query = DepartmentTracking.query.filter_by(department_id=user_dept.id)
+    if date_from:
+        try:
+            start_date = datetime.strptime(date_from, '%Y-%m-%d')
+            history_query = history_query.filter(DepartmentTracking.date_logged >= start_date)
+        except ValueError:
+            date_from = None
+    if date_to:
+        try:
+            end_date = datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)
+            history_query = history_query.filter(DepartmentTracking.date_logged < end_date)
+        except ValueError:
+            date_to = None
+    if status_filter:
+        history_query = history_query.filter(DepartmentTracking.status == status_filter)
+    if priority_filter:
+        history_query = history_query.filter(DepartmentTracking.priority == priority_filter)
+
+    history_entries = history_query.order_by(DepartmentTracking.date_logged.desc()).limit(100).all()
+
     if form.validate_on_submit():
         # Only set legacy fields if they exist in the form (backward compatibility)
         legacy_fields = [
@@ -286,54 +259,130 @@ def add_department_entry():
 
         # Get all tracking fields for this department
         tracking_fields = TrackingField.query.filter_by(department_id=user_dept.id).all()
-        
+
         # Collect custom field values from form
         for field_def in tracking_fields:
-            if field_def.field_name in legacy_fields:
+            if field_def.field_name in ['entry_no']:
+                custom_fields_data['entry_no'] = next_entry_no
+                continue
+            if field_def.field_name in ['priority', 'sla_tat', 'duration_mins', 'frequency_per_day', 'status']:
                 continue
             if hasattr(form, field_def.field_name):
                 field_value = getattr(form, field_def.field_name).data
                 if field_value:  # Only store non-empty values
                     custom_fields_data[field_def.field_name] = field_value
-        
+
         entry = DepartmentTracking(
             user_id=current_user.id,
             department_id=user_dept.id,
             activity_description=form.activity_description.data
         )
-        
+
         for field_name in legacy_fields:
             if hasattr(form, field_name):
                 field_data = getattr(form, field_name).data
                 if field_data:  # Only set if value exists
                     setattr(entry, field_name, field_data)
-        
+
+        if hasattr(form, 'status') and form.status.data:
+            entry.status = form.status.data
+
         # Store custom fields data
         if custom_fields_data:
             entry.set_custom_fields_data(custom_fields_data)
-        
+
         db.session.add(entry)
         db.session.commit()
-        
+
         flash('Activity logged successfully!', 'success')
         return redirect(url_for('main.department_tracking'))
-    
+
     return render_template(
         'add_department_entry.html',
         form=form,
         department=user_dept,
-        activity_no=activity_no,
-        current_date=today.strftime('%Y-%m-%d'),
-        today_entries=today_entries,
-        total_entries=total_entries,
+        next_entry_no=next_entry_no,
+        today_date=today.strftime('%Y-%m-%d'),
+        today_total=len(today_entries),
         high_priority_count=high_priority_count,
         sla_breached_count=sla_breached_count,
-        history_rows=history_rows,
-        filter_priority=filter_priority,
-        filter_status=filter_status,
-        filter_date_from=date_from,
-        filter_date_to=date_to,
+        history_entries=history_entries,
+        date_from=date_from,
+        date_to=date_to,
+        status_filter=status_filter,
+        priority_filter=priority_filter
     )
+
+
+@main.route('/export-department-entries')
+@login_required
+def export_department_entries():
+    user_dept = Department.query.filter_by(name=current_user.department).first()
+    if not user_dept:
+        flash('Your department is not configured. Please contact support.', 'danger')
+        return redirect(url_for('main.department_tracking'))
+
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    status_filter = request.args.get('status')
+    priority_filter = request.args.get('priority')
+
+    export_query = DepartmentTracking.query.filter_by(department_id=user_dept.id)
+    if date_from:
+        try:
+            start_date = datetime.strptime(date_from, '%Y-%m-%d')
+            export_query = export_query.filter(DepartmentTracking.date_logged >= start_date)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            end_date = datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)
+            export_query = export_query.filter(DepartmentTracking.date_logged < end_date)
+        except ValueError:
+            pass
+    if status_filter:
+        export_query = export_query.filter(DepartmentTracking.status == status_filter)
+    if priority_filter:
+        export_query = export_query.filter(DepartmentTracking.priority == priority_filter)
+
+    entries = export_query.order_by(DepartmentTracking.date_logged.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'Activity No',
+        'Date Logged',
+        'Employee',
+        'Priority',
+        'SLA / TAT',
+        'Duration (mins)',
+        'Frequency per Day',
+        'Status',
+        'Activity Description',
+        'Custom Fields'
+    ])
+
+    for entry in entries:
+        custom_fields = entry.get_custom_fields_data() if entry.custom_fields_data else {}
+        writer.writerow([
+            custom_fields.get('entry_no', ''),
+            entry.date_logged.strftime('%Y-%m-%d %H:%M'),
+            entry.user.name if entry.user else '',
+            entry.priority or '',
+            entry.sla_tat or '',
+            entry.duration_mins or '',
+            entry.frequency_per_day or '',
+            entry.status or '',
+            entry.activity_description or '',
+            custom_fields
+        ])
+
+    response = current_app.response_class(
+        output.getvalue(),
+        mimetype='text/csv'
+    )
+    response.headers['Content-Disposition'] = 'attachment; filename=productivity_entries.csv'
+    return response
 
 
 # --------------------------

@@ -28,7 +28,7 @@
 </div>
 {%- endmacro %}
 
-{% macro render_field(field, input_class="pt-input", helper="", rows=4) -%}
+{% macro render_field(field, input_class="pt-input", helper="") -%}
 <div class="pt-field">
     <label for="{{ field.id }}" class="pt-label">
         {{ field.label.text }}
@@ -39,7 +39,7 @@
     {% if field.type == 'SelectField' %}
         {{ field(class=input_class) }}
     {% elif field.type == 'TextAreaField' %}
-        {{ field(class=input_class, rows=rows) }}
+        {{ field(class=input_class, rows=4) }}
     {% elif field.type == 'IntegerField' %}
         {{ field(class=input_class, type="number") }}
     {% else %}

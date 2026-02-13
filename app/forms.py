@@ -26,6 +26,12 @@ class DepartmentTrackingForm(FlaskForm):
     tool_platform_used = StringField('Tool / Platform Used', validators=[Optional(), Length(max=200)])
     duration_mins = IntegerField('Duration (minutes)', validators=[Optional()])
     frequency_per_day = IntegerField('Frequency per Day', validators=[Optional()])
+    status = SelectField('Status', choices=[
+        ('Completed', 'Completed'),
+        ('In Progress', 'In Progress'),
+        ('Pending', 'Pending'),
+        ('Escalated', 'Escalated')
+    ], validators=[Optional()])
     submit = SubmitField('Log Activity')
 
 class DynamicDepartmentTrackingForm(FlaskForm):
@@ -40,6 +46,16 @@ class DynamicDepartmentTrackingForm(FlaskForm):
         """
         class GeneratedForm(FlaskForm):
             activity_description = TextAreaField('Activity Description', validators=[DataRequired(), Length(min=5, max=1000)])
+            priority = SelectField('Priority', choices=[('Low', 'Low'), ('Medium', 'Medium'), ('High', 'High')], validators=[Optional()])
+            sla_tat = StringField('SLA / TAT', validators=[Optional(), Length(max=100)])
+            duration_mins = IntegerField('Duration (mins)', validators=[Optional()])
+            frequency_per_day = IntegerField('Frequency per Day', validators=[Optional()])
+            status = SelectField('Status', choices=[
+                ('Completed', 'Completed'),
+                ('In Progress', 'In Progress'),
+                ('Pending', 'Pending'),
+                ('Escalated', 'Escalated')
+            ], validators=[Optional()])
             pass
         
         # Add dynamic fields based on department's tracking_fields

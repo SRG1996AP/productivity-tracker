@@ -33,6 +33,15 @@ def upgrade():
         else:
             print("✓ custom_fields_data column already exists")
 
+        if "status" not in columns:
+            db.session.execute(
+                text("ALTER TABLE department_tracking ADD COLUMN status VARCHAR(50)")
+            )
+            db.session.commit()
+            print("✓ status column added to DepartmentTracking")
+        else:
+            print("✓ status column already exists")
+
 if __name__ == '__main__':
     upgrade()
     print("\n📊 Migration completed!")

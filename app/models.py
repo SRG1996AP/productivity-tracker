@@ -66,6 +66,7 @@ class DepartmentTracking(db.Model):
     tool_platform_used = db.Column(db.String(200))
     duration_mins = db.Column(db.Integer)
     frequency_per_day = db.Column(db.Integer)
+    status = db.Column(db.String(50), default='Completed')
     # New field to store custom field values as JSON
     custom_fields_data = db.Column(db.Text)  # JSON object with custom field values
     date_logged = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

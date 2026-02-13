@@ -1,209 +1,300 @@
 {% extends "base.html" %}
-{% from "_productivity_form.html" import section_card, render_field, render_field_by_name, render_readonly, render_badge %}
 
 {% block content %}
 <div class="pt-page">
-    <header class="pt-page-header">
-        <div>
-            <p class="pt-eyebrow">Productivity Tracking</p>
-            <h1>{{ department.name }} Activity Log</h1>
-            <p class="pt-subtitle">Structured, auditable, and optimized for daily execution.</p>
+    <div class="page-header">
+        <div class="page-title">
+            <h1>Activity Tracking</h1>
+            <p>{{ department.name }} - Log a new activity with a structured format.</p>
         </div>
-        <div class="pt-header-actions">
-            <a class="btn btn-secondary" href="{{ url_for('main.department_tracking') }}">Back to Dashboard</a>
+        <div class="header-actions">
+            {% if current_user.is_admin %}
+                <a href="{{ url_for('main.admin_department_fields', dept_id=department.id) }}" class="btn btn-outline">Manage Fields</a>
+            {% endif %}
+            <a href="{{ url_for('main.department_tracking') }}" class="btn btn-outline">Back to Dashboard</a>
+            <a href="{{ url_for('main.logout') }}" class="btn btn-secondary">Logout</a>
         </div>
-    </header>
+    </div>
 
-    <section class="pt-summary">
-        <div class="pt-summary-card">
-            <p>Total Activities Today</p>
-            <h3>{{ today_entries|length }}</h3>
+    <div class="summary-panel">
+        <div class="summary-card">
+            <div class="summary-label">Total Activities Today</div>
+            <div class="summary-value">{{ today_total }}</div>
         </div>
-        <div class="pt-summary-card">
-            <p>High Priority Count</p>
-            <h3>{{ high_priority_count }}</h3>
+        <div class="summary-card">
+            <div class="summary-label">High Priority Count</div>
+            <div class="summary-value">{{ high_priority_count }}</div>
         </div>
-        <div class="pt-summary-card">
-            <p>SLA Breached Count</p>
-            <h3>{{ sla_breached_count }}</h3>
+        <div class="summary-card">
+            <div class="summary-label">SLA Breached Count</div>
+            <div class="summary-value">{{ sla_breached_count }}</div>
         </div>
-    </section>
+    </div>
 
-    <section class="pt-card pt-filter">
-        <div>
-            <h2>Activity History</h2>
-            <p>Filter recent entries by date, priority, or status.</p>
-        </div>
-        <form method="GET" class="pt-filter-form">
-            <div class="pt-grid pt-grid-4">
-                <div class="pt-field">
-                    <label class="pt-label" for="date_from">From</label>
-                    <input class="pt-input" type="date" id="date_from" name="date_from" value="{{ filter_date_from or '' }}">
-                </div>
-                <div class="pt-field">
-                    <label class="pt-label" for="date_to">To</label>
-                    <input class="pt-input" type="date" id="date_to" name="date_to" value="{{ filter_date_to or '' }}">
-                </div>
-                <div class="pt-field">
-                    <label class="pt-label" for="priority">Priority</label>
-                    <select class="pt-input" id="priority" name="priority">
-                        <option value="">All</option>
-                        {% for option in ['Low', 'Medium', 'High', 'Urgent'] %}
-                        <option value="{{ option }}" {% if filter_priority == option %}selected{% endif %}>{{ option }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="pt-field">
-                    <label class="pt-label" for="status">Status</label>
-                    <select class="pt-input" id="status" name="status">
-                        <option value="">All</option>
-                        {% for option in ['Completed', 'In Progress', 'Pending', 'Escalated'] %}
-                        <option value="{{ option }}" {% if filter_status == option %}selected{% endif %}>{{ option }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <div class="pt-filter-actions">
-                <button type="submit" class="btn btn-primary">Apply Filters</button>
-                <a class="btn btn-secondary" href="{{ url_for('main.add_department_entry') }}">Reset</a>
-                <button type="button" class="btn btn-outline">Export to Excel</button>
-            </div>
-        </form>
-    </section>
-
-    <form method="POST" class="pt-form">
+    <form method="POST" class="entry-form">
         {{ form.hidden_tag() }}
-
-        {% set known_fields = [
-            'priority', 'sla_tat', 'campaign_account', 'team_agent_group',
-            'supporting_campaign_project', 'campaign_process_audited',
-            'financial_area', 'hiring_project_campaign', 'hr_process_area',
-            'system_application', 'ops_business_requirement', 'ops_client_requirement',
-            'ops_employee_requirement', 'client_ops_requirement', 'ticket_request_type',
-            'tool_platform_used', 'tool_crm_telephony_used', 'report_name',
-            'training_program_batch', 'training_type', 'audit_type',
-            'transaction_type', 'position_role', 'request_type',
-            'policy_sop_reference', 'duration_mins', 'frequency_per_day',
-            'status', 'output_report', 'output_evidence', 'output_scorecard',
-            'remarks'
+        {% set base_fields = ['activity_description', 'priority', 'sla_tat', 'duration_mins', 'frequency_per_day', 'status', 'csrf_token', 'submit', 'entry_no'] %}
+        {% set detail_fields = [
+            'campaign_account',
+            'supporting_campaign_project',
+            'training_program_batch',
+            'campaign_process_audited',
+            'financial_area',
+            'hiring_project_campaign',
+            'hr_process_area',
+            'system_application',
+            'ops_business_requirement',
+            'client_ops_requirement',
+            'ops_client_requirement',
+            'ops_employee_requirement',
+            'activity_category',
+            'audit_type',
+            'transaction_type',
+            'position_role',
+            'request_type',
+            'ticket_request_type',
+            'training_type',
+            'report_name',
+            'qa_standard_kpi',
+            'policy_sop_reference',
+            'tool_platform_used',
+            'tool_lms_used',
+            'tool_crm_telephony_used',
+            'qa_tool_used',
+            'training_mode',
+            'approval_level',
+            'kpi_sla_impacted'
+        ] %}
+        {% set metric_fields = [
+            'output_report',
+            'output_evidence',
+            'output_scorecard',
+            'remarks',
+            'sample_size',
+            'hiring_volume',
+            'amount_if_applicable',
+            'no_of_trainees'
         ] %}
 
-        {% call section_card(
-            'Activity Information',
-            'Auto-filled details for traceability and SLA alignment.',
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><path d="M7 3v18"/></svg>'
-        ) %}
-        <div class="pt-grid pt-grid-2">
-            {{ render_readonly('Activity No', activity_no) }}
-            {{ render_readonly('Department', department.name) }}
-            {{ render_readonly('Date', current_date) }}
-            <div class="pt-field">
-                <label class="pt-label">Employee Name</label>
-                <div class="pt-readonly" aria-disabled="true">{{ current_user.name }}</div>
-            </div>
-            {{ render_field_by_name(form, 'priority', input_class='pt-input pt-priority-select') }}
-            {{ render_field_by_name(form, 'sla_tat') }}
-        </div>
-        {% endcall %}
-
-        {% call section_card(
-            'Activity Details',
-            'Capture the operational context and purpose of the activity.',
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h6"/></svg>'
-        ) %}
-        <div class="pt-grid pt-grid-2">
-            {{ render_field_by_name(form, 'campaign_account') }}
-            {{ render_field_by_name(form, 'team_agent_group') }}
-            {{ render_field_by_name(form, 'supporting_campaign_project') }}
-            {{ render_field_by_name(form, 'campaign_process_audited') }}
-            {{ render_field_by_name(form, 'financial_area') }}
-            {{ render_field_by_name(form, 'hiring_project_campaign') }}
-            {{ render_field_by_name(form, 'hr_process_area') }}
-            {{ render_field_by_name(form, 'system_application') }}
-            {{ render_field_by_name(form, 'ops_business_requirement') }}
-            {{ render_field_by_name(form, 'ops_client_requirement') }}
-            {{ render_field_by_name(form, 'ops_employee_requirement') }}
-            {{ render_field_by_name(form, 'client_ops_requirement') }}
-            {{ render_field_by_name(form, 'ticket_request_type') }}
-            {{ render_field_by_name(form, 'tool_platform_used') }}
-            {{ render_field_by_name(form, 'tool_crm_telephony_used') }}
-            {{ render_field_by_name(form, 'report_name') }}
-            {{ render_field_by_name(form, 'training_program_batch') }}
-            {{ render_field_by_name(form, 'training_type') }}
-            {{ render_field_by_name(form, 'audit_type') }}
-            {{ render_field_by_name(form, 'transaction_type') }}
-            {{ render_field_by_name(form, 'position_role') }}
-            {{ render_field_by_name(form, 'request_type') }}
-            {{ render_field_by_name(form, 'policy_sop_reference') }}
-        </div>
-        <div class="pt-field pt-field-full">
-            {{ render_field(form.activity_description, helper='Minimum 5 characters. Max 1000.', rows=6) }}
-            <div class="pt-counter" data-counter>0/1000</div>
-        </div>
-        {% endcall %}
-
-        {% call section_card(
-            'Productivity & Metrics',
-            'Quantify effort, output, and outcomes for reporting.',
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 20h16M6 16v-6M12 16V8M18 16v-3"/></svg>'
-        ) %}
-        <div class="pt-grid pt-grid-2">
-            {{ render_field_by_name(form, 'duration_mins', helper='Auto-highlight if duration exceeds SLA.') }}
-            {{ render_field_by_name(form, 'frequency_per_day') }}
-            {{ render_field_by_name(form, 'status') }}
-            {{ render_field_by_name(form, 'output_report') }}
-            {{ render_field_by_name(form, 'output_evidence') }}
-            {{ render_field_by_name(form, 'output_scorecard') }}
-            {{ render_field_by_name(form, 'remarks') }}
-        </div>
-        <div class="pt-alert" id="sla-alert" hidden>
-            <span class="pt-alert-icon">!</span>
-            <span>Duration exceeds SLA/TAT. Please review or add a justification in remarks.</span>
-        </div>
-        {% endcall %}
-
-        {% set ns = namespace(has_extra=false) %}
-        {% for field in form %}
-            {% if field.name not in ['activity_description', 'submit', 'csrf_token'] and field.name not in known_fields %}
-                {% set ns.has_extra = true %}
-            {% endif %}
-        {% endfor %}
-
-        {% if ns.has_extra %}
-        <section class="pt-card">
-            <div class="pt-card-header-static">
+        <details class="section-card" open>
+            <summary class="section-header">
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 4h16v16H4z"></path>
+                        <path d="M8 8h8"></path>
+                        <path d="M8 12h8"></path>
+                        <path d="M8 16h5"></path>
+                    </svg>
+                </span>
                 <div>
-                    <h2>Additional Fields</h2>
-                    <p>Custom fields added by admins appear here.</p>
+                    <h2>Activity Information</h2>
+                    <p>Auto-filled identifiers and service levels.</p>
+                </div>
+            </summary>
+            <div class="section-body">
+                <div class="field-grid two-col">
+                    <div class="field-group">
+                        <label>Activity No</label>
+                        <input type="text" class="form-control" value="{{ next_entry_no }}" readonly>
+                        <span class="field-hint">Auto-generated on submit</span>
+                    </div>
+                    <div class="field-group">
+                        <label>Department</label>
+                        <input type="text" class="form-control" value="{{ department.name }}" readonly>
+                    </div>
+                    <div class="field-group">
+                        <label>Date</label>
+                        <input type="text" class="form-control" value="{{ today_date }}" readonly>
+                    </div>
+                    <div class="field-group">
+                        <label>Employee Name</label>
+                        <input type="text" class="form-control" value="{{ current_user.name }}" readonly>
+                    </div>
+                    <div class="field-group">
+                        <label for="{{ form.priority.id }}">Priority</label>
+                        {{ form.priority(class="form-control js-priority") }}
+                        <div class="field-indicator" id="priority-indicator"></div>
+                    </div>
+                    <div class="field-group">
+                        <label for="{{ form.sla_tat.id }}">SLA / TAT</label>
+                        {{ form.sla_tat(class="form-control js-sla") }}
+                    </div>
                 </div>
             </div>
-            <div class="pt-card-body">
-                <div class="pt-grid pt-grid-2">
+        </details>
+
+        <details class="section-card" open>
+            <summary class="section-header">
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12h18"></path>
+                        <path d="M12 3v18"></path>
+                        <path d="M7 7h10v10H7z"></path>
+                    </svg>
+                </span>
+                <div>
+                    <h2>Activity Details</h2>
+                    <p>Context, process area, and supporting information.</p>
+                </div>
+            </summary>
+            <div class="section-body">
+                <div class="field-grid two-col">
+                    {% for field_name in detail_fields %}
+                        {% if field_name in form._fields %}
+                            {% set field = form._fields[field_name] %}
+                            <div class="field-group">
+                                <label for="{{ field.id }}">{{ field.label.text }}</label>
+                                {% if field.type == 'SelectField' %}
+                                    {{ field(class="form-control") }}
+                                {% elif field.type == 'TextAreaField' %}
+                                    {{ field(class="form-control", rows=3) }}
+                                {% elif field.type == 'IntegerField' %}
+                                    {{ field(class="form-control", type="number") }}
+                                {% else %}
+                                    {{ field(class="form-control") }}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+
                     {% for field in form %}
-                        {% if field.name not in ['activity_description', 'submit', 'csrf_token'] and field.name not in known_fields %}
-                            {{ render_field(field) }}
+                        {% if field.name not in base_fields and field.name not in detail_fields and field.name not in metric_fields %}
+                            <div class="field-group">
+                                <label for="{{ field.id }}">{{ field.label.text }}</label>
+                                {% if field.type == 'SelectField' %}
+                                    {{ field(class="form-control") }}
+                                {% elif field.type == 'TextAreaField' %}
+                                    {{ field(class="form-control", rows=3) }}
+                                {% elif field.type == 'IntegerField' %}
+                                    {{ field(class="form-control", type="number") }}
+                                {% else %}
+                                    {{ field(class="form-control") }}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <div class="field-group full-width">
+                    <label for="activity_description">Detailed Activity Description</label>
+                    {{ form.activity_description(class="form-control js-description", rows=6, placeholder="Describe the activity you performed...", maxlength=1000) }}
+                    <div class="field-meta">
+                        <span class="field-hint">Minimum 5 characters, maximum 1000</span>
+                        <span class="char-counter" data-target="activity_description">0/1000</span>
+                    </div>
+                    {% if form.activity_description.errors %}
+                        <div class="error-text">
+                            {% for error in form.activity_description.errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </details>
+
+        <details class="section-card" open>
+            <summary class="section-header">
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 3h18v6H3z"></path>
+                        <path d="M7 13h10"></path>
+                        <path d="M7 18h10"></path>
+                    </svg>
+                </span>
+                <div>
+                    <h2>Productivity & Metrics</h2>
+                    <p>Time, frequency, output, and completion status.</p>
+                </div>
+            </summary>
+            <div class="section-body">
+                <div class="field-grid two-col">
+                    <div class="field-group">
+                        <label for="{{ form.duration_mins.id }}">Duration (mins)</label>
+                        {{ form.duration_mins(class="form-control js-duration", type="number") }}
+                        <div class="field-indicator" id="sla-indicator"></div>
+                    </div>
+                    <div class="field-group">
+                        <label for="{{ form.frequency_per_day.id }}">Frequency per Day</label>
+                        {{ form.frequency_per_day(class="form-control", type="number") }}
+                    </div>
+                    <div class="field-group">
+                        <label for="{{ form.status.id }}">Status</label>
+                        {{ form.status(class="form-control") }}
+                    </div>
+                </div>
+
+                <div class="field-grid two-col">
+                    {% for field_name in metric_fields %}
+                        {% if field_name in form._fields %}
+                            {% set field = form._fields[field_name] %}
+                            <div class="field-group">
+                                <label for="{{ field.id }}">{{ field.label.text }}</label>
+                                {% if field.type == 'TextAreaField' %}
+                                    {{ field(class="form-control", rows=3) }}
+                                {% elif field.type == 'IntegerField' %}
+                                    {{ field(class="form-control", type="number") }}
+                                {% else %}
+                                    {{ field(class="form-control") }}
+                                {% endif %}
+                            </div>
                         {% endif %}
                     {% endfor %}
                 </div>
             </div>
-        </section>
-        {% endif %}
+        </details>
 
-        <div class="pt-actions">
-            <button type="button" class="btn btn-outline">Save Draft</button>
+        <div class="form-actions">
             {{ form.submit(class="btn btn-primary") }}
+            <button type="button" class="btn btn-outline">Save Draft</button>
         </div>
     </form>
 
-    <section class="pt-card">
-        <div class="pt-card-header-static">
+    <section class="section-card history-card">
+        <div class="history-header">
             <div>
                 <h2>Activity History</h2>
-                <p>Recent activity submissions for {{ department.name }}.</p>
+                <p>Filter and review recent activity submissions.</p>
             </div>
+            <a class="btn btn-outline" href="{{ url_for('main.export_department_entries', date_from=date_from, date_to=date_to, status=status_filter, priority=priority_filter) }}">Export to Excel</a>
         </div>
-        <div class="pt-table-wrapper">
-            <table class="pt-table">
+
+        <form method="GET" class="filter-bar">
+            <div class="field-group">
+                <label for="date_from">From</label>
+                <input type="date" id="date_from" name="date_from" class="form-control" value="{{ date_from or '' }}">
+            </div>
+            <div class="field-group">
+                <label for="date_to">To</label>
+                <input type="date" id="date_to" name="date_to" class="form-control" value="{{ date_to or '' }}">
+            </div>
+            <div class="field-group">
+                <label for="status">Status</label>
+                <select id="status" name="status" class="form-control">
+                    <option value="">All</option>
+                    <option value="Completed" {% if status_filter == 'Completed' %}selected{% endif %}>Completed</option>
+                    <option value="In Progress" {% if status_filter == 'In Progress' %}selected{% endif %}>In Progress</option>
+                    <option value="Pending" {% if status_filter == 'Pending' %}selected{% endif %}>Pending</option>
+                    <option value="Escalated" {% if status_filter == 'Escalated' %}selected{% endif %}>Escalated</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label for="priority">Priority</label>
+                <select id="priority" name="priority" class="form-control">
+                    <option value="">All</option>
+                    <option value="Low" {% if priority_filter == 'Low' %}selected{% endif %}>Low</option>
+                    <option value="Medium" {% if priority_filter == 'Medium' %}selected{% endif %}>Medium</option>
+                    <option value="High" {% if priority_filter == 'High' %}selected{% endif %}>High</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="{{ url_for('main.add_department_entry') }}" class="btn btn-outline">Clear</a>
+            </div>
+        </form>
+
+        <div class="table-wrapper">
+            <table class="history-table">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -211,34 +302,28 @@
                         <th>Priority</th>
                         <th>Duration</th>
                         <th>Status</th>
-                        <th>Output</th>
-                        <th>Remarks</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if history_rows %}
-                        {% for entry in history_rows %}
+                    {% for entry in history_entries %}
                         <tr>
                             <td>{{ entry.date_logged.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td>{{ entry.description[:60] }}{% if entry.description|length > 60 %}...{% endif %}</td>
+                            <td>{{ entry.activity_description[:80] }}{% if entry.activity_description|length > 80 %}...{% endif %}</td>
                             <td>
                                 {% if entry.priority %}
-                                    {{ render_badge(entry.priority, entry.priority.lower()) }}
+                                    <span class="badge badge-priority badge-{{ entry.priority.lower() }}">{{ entry.priority }}</span>
                                 {% else %}
-                                    {{ render_badge('None', 'none') }}
+                                    <span class="badge badge-neutral">-</span>
                                 {% endif %}
                             </td>
                             <td>{{ entry.duration_mins or '-' }}</td>
-                            <td>{{ entry.status }}</td>
-                            <td>{{ entry.output }}</td>
-                            <td>{{ entry.remarks }}</td>
+                            <td>{{ entry.status or '-' }}</td>
                         </tr>
-                        {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="7" class="pt-empty">No activity records found.</td>
+                            <td colspan="5" class="empty-state">No activities match the selected filters.</td>
                         </tr>
-                    {% endif %}
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
@@ -246,63 +331,64 @@
 </div>
 
 <script>
-const descriptionField = document.getElementById('activity_description');
-const counter = document.querySelector('[data-counter]');
-const durationField = document.getElementById('duration_mins');
-const slaField = document.getElementById('sla_tat');
-const slaAlert = document.getElementById('sla-alert');
-const priorityField = document.getElementById('priority');
+const descriptionField = document.querySelector('.js-description');
+const counter = document.querySelector('.char-counter');
+const prioritySelect = document.querySelector('.js-priority');
+const priorityIndicator = document.getElementById('priority-indicator');
+const durationField = document.querySelector('.js-duration');
+const slaField = document.querySelector('.js-sla');
+const slaIndicator = document.getElementById('sla-indicator');
 
 const updateCounter = () => {
     if (!descriptionField || !counter) return;
-    const max = 1000;
-    const current = descriptionField.value.length;
-    counter.textContent = `${current}/${max}`;
+    const maxLength = parseInt(descriptionField.getAttribute('maxlength') || '1000', 10);
+    counter.textContent = `${descriptionField.value.length}/${maxLength}`;
 };
 
-const parseNumber = (value) => {
-    const match = String(value || '').match(/\d+/);
-    return match ? parseInt(match[0], 10) : null;
-};
-
-const checkSla = () => {
-    if (!durationField || !slaField || !slaAlert) return;
-    const duration = parseNumber(durationField.value);
-    const sla = parseNumber(slaField.value);
-    if (duration && sla && duration > sla) {
-        slaAlert.hidden = false;
-        durationField.classList.add('pt-input-warning');
+const updatePriorityIndicator = () => {
+    if (!prioritySelect || !priorityIndicator) return;
+    const value = prioritySelect.value.toLowerCase();
+    if (value === 'high') {
+        priorityIndicator.textContent = 'High priority selected';
+        priorityIndicator.className = 'field-indicator warn';
     } else {
-        slaAlert.hidden = true;
-        durationField.classList.remove('pt-input-warning');
+        priorityIndicator.textContent = '';
+        priorityIndicator.className = 'field-indicator';
     }
 };
 
-const updatePriorityTone = () => {
-    if (!priorityField) return;
-    const value = (priorityField.value || '').toLowerCase();
-    priorityField.dataset.tone = value;
+const parseNumber = (value) => {
+    const match = (value || '').toString().match(/\d+(\.\d+)?/);
+    return match ? parseFloat(match[0]) : null;
+};
+
+const updateSlaIndicator = () => {
+    if (!durationField || !slaField || !slaIndicator) return;
+    const duration = parseNumber(durationField.value);
+    const sla = parseNumber(slaField.value);
+    if (duration && sla && duration > sla) {
+        slaIndicator.textContent = 'Duration exceeds SLA';
+        slaIndicator.className = 'field-indicator warn';
+    } else {
+        slaIndicator.textContent = '';
+        slaIndicator.className = 'field-indicator';
+    }
 };
 
 if (descriptionField) {
-    descriptionField.setAttribute('maxlength', '1000');
     descriptionField.addEventListener('input', updateCounter);
     updateCounter();
 }
 
-if (durationField) {
-    durationField.addEventListener('input', checkSla);
+if (prioritySelect) {
+    prioritySelect.addEventListener('change', updatePriorityIndicator);
+    updatePriorityIndicator();
 }
 
-if (slaField) {
-    slaField.addEventListener('input', checkSla);
+if (durationField && slaField) {
+    durationField.addEventListener('input', updateSlaIndicator);
+    slaField.addEventListener('input', updateSlaIndicator);
+    updateSlaIndicator();
 }
-
-if (priorityField) {
-    priorityField.addEventListener('change', updatePriorityTone);
-    updatePriorityTone();
-}
-
-checkSla();
 </script>
 {% endblock %}

@@ -3,8 +3,6 @@
 Seed default tracking fields for each department.
 """
 
-import sys
-
 from app import create_app, db
 from app.models import Department, TrackingField
 from default_tracking_fields import get_default_tracking_fields_by_key, match_department_key
@@ -13,7 +11,6 @@ from default_tracking_fields import get_default_tracking_fields_by_key, match_de
 def seed_defaults():
     app = create_app()
     defaults = get_default_tracking_fields_by_key()
-    force_reset = "--force" in sys.argv
 
     with app.app_context():
         departments = Department.query.all()
@@ -32,12 +29,8 @@ def seed_defaults():
 
             existing = TrackingField.query.filter_by(department_id=dept.id).count()
             if existing > 0:
-                if force_reset:
-                    TrackingField.query.filter_by(department_id=dept.id).delete()
-                    db.session.flush()
-                else:
-                    skipped += 1
-                    continue
+                skipped += 1
+                continue
 
             fields = defaults.get(key, [])
             for order_index, field_def in enumerate(fields, start=1):
