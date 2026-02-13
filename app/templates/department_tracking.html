@@ -184,6 +184,7 @@
     <div class="add-entry-btn-container">
         <a href="{{ url_for('main.add_department_entry') }}" class="btn btn-primary">+ Log New Activity</a>
         {% if current_user.is_admin %}
+            <a href="{{ url_for('main.admin_department_fields', dept_id=department.id) }}" class="btn btn-warning">⚙️ Configure Tracking Fields</a>
             <a href="{{ url_for('main.management_dashboard') }}" class="btn btn-secondary">📊 Management Dashboard</a>
         {% endif %}
         <a href="{{ url_for('main.logout') }}" class="btn btn-secondary" style="float: right;">Logout</a>

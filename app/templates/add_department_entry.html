@@ -12,10 +12,13 @@
         <form method="POST" class="entry-form">
             {{ form.hidden_tag() }}
             
+            <!-- Activity Description (Always Required) -->
             <div class="form-group">
-                {{ form.activity_description.label }}
+                <label for="activity_description" style="display: block; font-weight: 600; margin-bottom: 8px; color: #333;">
+                    Activity Description <span style="color: #dc3545;">*</span>
+                </label>
                 {% if form.activity_description.errors %}
-                    {{ form.activity_description(class="form-control error", rows=5) }}
+                    {{ form.activity_description(class="form-control error", rows=5, placeholder="Describe the activity you performed...") }}
                     <div class="error-text">
                         {% for error in form.activity_description.errors %}
                             <p>{{ error }}</p>
@@ -27,15 +30,16 @@
                 <small class="form-hint">Minimum 5 characters, maximum 1000</small>
             </div>
             
-            <!-- Dynamic Fields Section -->
-            {% if form._fields|length > 2 %}  <!-- More than just activity_description and submit -->
+            <!-- Custom Fields Section -->
+            {% set custom_field_count = form._fields|length - 3 %}
+            {% if custom_field_count > 0 %}
             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #28a745;">
                 <h3 style="margin-top: 0; margin-bottom: 15px; color: #333;">Custom Fields for {{ department.name }}</h3>
                 
                 {% for field in form %}
                     {% if field.name not in ['activity_description', 'submit', 'csrf_token'] %}
                     <div class="form-group" style="margin-bottom: 15px;">
-                        <label for="{{ field.id }}" style="display: block; font-weight: 600; margin-bottom: 5px;">
+                        <label for="{{ field.id }}" style="display: block; font-weight: 600; margin-bottom: 8px; color: #333;">
                             {{ field.label.text }}
                             {% if field.flags.required %}
                                 <span style="color: #dc3545;">*</span>
@@ -43,30 +47,14 @@
                         </label>
                         
                         {% if field.type == 'SelectField' %}
-                            {% if field.errors %}
-                                {{ field(class="form-control error") }}
-                            {% else %}
-                                {{ field(class="form-control") }}
-                            {% endif %}
+                            {{ field(class="form-control") }}
                         {% elif field.type == 'TextAreaField' %}
-                            {% if field.errors %}
-                                {{ field(class="form-control error", rows=4) }}
-                            {% else %}
-                                {{ field(class="form-control", rows=4) }}
-                            {% endif %}
+                            {{ field(class="form-control", rows=4) }}
                         {% elif field.type == 'IntegerField' %}
-                            {% if field.errors %}
-                                {{ field(class="form-control error", type="number") }}
-                            {% else %}
-                                {{ field(class="form-control", type="number") }}
-                            {% endif %}
+                            {{ field(class="form-control", type="number") }}
                         {% else %}
                             <!-- Text or Date fields -->
-                            {% if field.errors %}
-                                {{ field(class="form-control error") }}
-                            {% else %}
-                                {{ field(class="form-control") }}
-                            {% endif %}
+                            {{ field(class="form-control") }}
                         {% endif %}
                         
                         {% if field.errors %}
@@ -79,6 +67,10 @@
                     </div>
                     {% endif %}
                 {% endfor %}
+            </div>
+            {% else %}
+            <div style="background-color: #e8f5e9; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #4caf50; color: #2e7d32;">
+                <p style="margin: 0;"><strong>ℹ️ No custom fields configured yet.</strong> Admin can add fields from <strong>User Management → Manage Tracking Fields</strong></p>
             </div>
             {% endif %}
             
