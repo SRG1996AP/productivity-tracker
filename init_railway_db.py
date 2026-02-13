@@ -58,6 +58,12 @@ def init_db():
             db.create_all()
             print("✓ Database tables created successfully")
             
+            # Run migrations to add new columns and tables
+            print("\n→ Running database migrations...")
+            from migrate_tracking_fields import upgrade
+            upgrade()
+            print("✓ Migrations applied successfully")
+            
             # Check if departments exist, if not create them
             if Department.query.count() == 0:
                 for dept_data in DEPARTMENTS:
@@ -86,6 +92,38 @@ def init_db():
                 print("✓ Created default admin user (login: admin, password: admin123)")
             else:
                 print(f"✓ Found {User.query.count()} existing users")
+            
+            # Seed default tracking fields for departments
+            print("\n→ Seeding default tracking fields...")
+            from default_tracking_fields import get_default_tracking_fields_by_key, match_department_key
+            from app.models import TrackingField
+            
+            departments_configured = 0
+            for dept in Department.query.all():
+                dept_key = match_department_key(dept.name)
+                if dept_key:
+                    existing_fields = TrackingField.query.filter_by(department_id=dept.id).count()
+                    if existing_fields == 0:
+                        # Get default fields for this department
+                        defaults = get_default_tracking_fields_by_key()
+                        fields = defaults.get(dept_key, [])
+                        
+                        for field_data in fields:
+                            field = TrackingField(
+                                department_id=dept.id,
+                                field_name=field_data['name'],
+                                field_label=field_data.get('label', field_data['name']),
+                                field_type=field_data.get('type', 'text'),
+                                choices=field_data.get('choices', [])
+                            )
+                            db.session.add(field)
+                        
+                        if fields:
+                            db.session.commit()
+                            departments_configured += 1
+                            print(f"  → Configured {len(fields)} fields for {dept.name}")
+            
+            print(f"✓ Default tracking fields seeded ({departments_configured} departments configured)")
             
             print("✓ Database initialization complete!")
             return True
