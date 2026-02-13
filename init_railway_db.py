@@ -95,35 +95,57 @@ def init_db():
             
             # Seed default tracking fields for departments
             print("\n→ Seeding default tracking fields...")
-            from default_tracking_fields import get_default_tracking_fields_by_key, match_department_key
-            from app.models import TrackingField
-            
-            departments_configured = 0
-            for dept in Department.query.all():
-                dept_key = match_department_key(dept.name)
-                if dept_key:
-                    existing_fields = TrackingField.query.filter_by(department_id=dept.id).count()
-                    if existing_fields == 0:
-                        # Get default fields for this department
-                        defaults = get_default_tracking_fields_by_key()
-                        fields = defaults.get(dept_key, [])
+            try:
+                from default_tracking_fields import get_default_tracking_fields_by_key, match_department_key
+                from app.models import TrackingField
+                
+                defaults_map = get_default_tracking_fields_by_key()
+                departments_configured = 0
+                
+                for dept in Department.query.all():
+                    try:
+                        dept_key = match_department_key(dept.name)
+                        if not dept_key:
+                            continue
                         
-                        for field_data in fields:
-                            field = TrackingField(
-                                department_id=dept.id,
-                                field_name=field_data['name'],
-                                field_label=field_data.get('label', field_data['name']),
-                                field_type=field_data.get('type', 'text'),
-                                choices=field_data.get('choices', [])
-                            )
-                            db.session.add(field)
+                        existing_fields = TrackingField.query.filter_by(department_id=dept.id).count()
+                        if existing_fields > 0:
+                            print(f"  ⊙ [{dept.name}] Already has {existing_fields} fields, skipping")
+                            continue
                         
-                        if fields:
-                            db.session.commit()
-                            departments_configured += 1
-                            print(f"  → Configured {len(fields)} fields for {dept.name}")
-            
-            print(f"✓ Default tracking fields seeded ({departments_configured} departments configured)")
+                        fields_to_add = defaults_map.get(dept_key, [])
+                        if not fields_to_add:
+                            print(f"  ⊗ [{dept.name}] No default fields found for key '{dept_key}'")
+                            continue
+                        
+                        # Add fields for this department
+                        for idx, field_data in enumerate(fields_to_add, 1):
+                            try:
+                                field = TrackingField(
+                                    department_id=dept.id,
+                                    field_name=field_data['name'],
+                                    field_label=field_data.get('label', field_data['name']),
+                                    field_type=field_data.get('type', 'text'),
+                                    choices=field_data.get('choices', []),
+                                    order=idx
+                                )
+                                db.session.add(field)
+                            except Exception as field_err:
+                                print(f"    ✗ Error adding field {field_data['name']}: {field_err}")
+                        
+                        db.session.commit()
+                        departments_configured += 1
+                        print(f"  ✓ [{dept.name}] Configured {len(fields_to_add)} fields")
+                        
+                    except Exception as dept_err:
+                        print(f"  ✗ Error processing department {dept.name}: {dept_err}")
+                        db.session.rollback()
+                
+                print(f"✓ Default tracking fields seeded ({departments_configured} departments configured)")
+            except Exception as seed_err:
+                print(f"✗ Error during field seeding: {seed_err}")
+                import traceback
+                traceback.print_exc()
             
             print("✓ Database initialization complete!")
             return True
