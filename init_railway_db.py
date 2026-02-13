@@ -96,54 +96,128 @@ def init_db():
             # Seed default tracking fields for departments
             print("\n→ Seeding default tracking fields...")
             try:
-                from default_tracking_fields import get_default_tracking_fields_by_key, match_department_key
                 from app.models import TrackingField
                 
-                defaults_map = get_default_tracking_fields_by_key()
+                # Map department names to their field definitions
+                dept_fields_map = {
+                    'Finance - Daily Tracking': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'financial_area', 'label': 'Financial Area', 'type': 'text'},
+                        {'name': 'ops_business_requirement', 'label': 'OPS / Business Requirement', 'type': 'text'},
+                        {'name': 'transaction_type', 'label': 'Transaction Type', 'type': 'text'},
+                        {'name': 'amount_if_applicable', 'label': 'Amount (if applicable)', 'type': 'number'},
+                        {'name': 'approval_level', 'label': 'Approval Level', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'output_report', 'label': 'Output / Report', 'type': 'textarea'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                    'IT - Daily Tracking': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'system_application', 'label': 'System / Application Supported', 'type': 'text'},
+                        {'name': 'ops_business_requirement', 'label': 'OPS / Business Requirement', 'type': 'text'},
+                        {'name': 'ticket_request_type', 'label': 'Ticket / Request Type', 'type': 'text'},
+                        {'name': 'priority', 'label': 'Priority', 'type': 'select', 'choices': ['Low', 'Medium', 'High', 'Urgent']},
+                        {'name': 'sla_tat', 'label': 'SLA / TAT', 'type': 'text'},
+                        {'name': 'tool_platform_used', 'label': 'Tool / Platform Used', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'output_report', 'label': 'Output / Report', 'type': 'textarea'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                    'HR - Daily Tracking': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'hr_process_area', 'label': 'HR Process Area', 'type': 'text'},
+                        {'name': 'ops_employee_requirement', 'label': 'OPS / Employee Requirement', 'type': 'text'},
+                        {'name': 'request_type', 'label': 'Request Type', 'type': 'text'},
+                        {'name': 'policy_sop_reference', 'label': 'Policy / SOP Reference', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'output_report', 'label': 'Output / Report', 'type': 'textarea'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                    'TA - Daily Tracking': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'hiring_project_campaign', 'label': 'Hiring Project / Campaign', 'type': 'text'},
+                        {'name': 'ops_client_requirement', 'label': 'OPS / Client Requirement', 'type': 'text'},
+                        {'name': 'position_role', 'label': 'Position / Role', 'type': 'text'},
+                        {'name': 'hiring_volume', 'label': 'Hiring Volume', 'type': 'number'},
+                        {'name': 'stage_of_hiring', 'label': 'Stage of Hiring', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'output_report', 'label': 'Output / Report', 'type': 'textarea'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                    'QA - Daily Tracking': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'campaign_process_audited', 'label': 'Campaign / Process Audited', 'type': 'text'},
+                        {'name': 'ops_client_requirement', 'label': 'OPS / Client Requirement', 'type': 'text'},
+                        {'name': 'audit_type', 'label': 'Audit Type', 'type': 'text'},
+                        {'name': 'sample_size', 'label': 'Sample Size', 'type': 'number'},
+                        {'name': 'qa_standard_kpi', 'label': 'QA Standard / KPI', 'type': 'text'},
+                        {'name': 'qa_tool_used', 'label': 'QA Tool Used', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'output_scorecard', 'label': 'Output / Scorecard', 'type': 'textarea'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                    'Training - Daily Tracking': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'training_program_batch', 'label': 'Training Program / Batch', 'type': 'text'},
+                        {'name': 'ops_client_requirement', 'label': 'OPS / Client Requirement', 'type': 'text'},
+                        {'name': 'training_type', 'label': 'Training Type', 'type': 'text'},
+                        {'name': 'no_of_trainees', 'label': 'No. of Trainees', 'type': 'number'},
+                        {'name': 'training_mode', 'label': 'Training Mode', 'type': 'text'},
+                        {'name': 'tool_lms_used', 'label': 'Tool / LMS Used', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'output_report', 'label': 'Output / Report', 'type': 'textarea'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                    'RTA - Daily Tracking': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'supporting_campaign_project', 'label': 'Supporting Campaign/Project', 'type': 'text'},
+                        {'name': 'client_ops_requirement', 'label': 'Client/OPS Requirement', 'type': 'text'},
+                        {'name': 'report_name', 'label': 'Report Name', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'tool_crm_telephony_used', 'label': 'Tool/CRM/Telephony Used', 'type': 'text'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                    'Operations Leaders - Daily': [
+                        {'name': 'entry_no', 'label': 'No', 'type': 'number'},
+                        {'name': 'campaign_account', 'label': 'Campaign / Account', 'type': 'text'},
+                        {'name': 'client_ops_requirement', 'label': 'Client / OPS Requirement', 'type': 'text'},
+                        {'name': 'activity_category', 'label': 'Activity Category', 'type': 'text'},
+                        {'name': 'kpi_sla_impacted', 'label': 'KPI / SLA Impacted', 'type': 'text'},
+                        {'name': 'duration_mins', 'label': 'Duration (mins)', 'type': 'number'},
+                        {'name': 'output_evidence', 'label': 'Output / Evidence', 'type': 'textarea'},
+                        {'name': 'remarks', 'label': 'Remarks', 'type': 'textarea'},
+                    ],
+                }
+                
                 departments_configured = 0
-                
                 for dept in Department.query.all():
-                    try:
-                        dept_key = match_department_key(dept.name)
-                        if not dept_key:
-                            continue
-                        
-                        existing_fields = TrackingField.query.filter_by(department_id=dept.id).count()
-                        if existing_fields > 0:
-                            print(f"  ⊙ [{dept.name}] Already has {existing_fields} fields, skipping")
-                            continue
-                        
-                        fields_to_add = defaults_map.get(dept_key, [])
-                        if not fields_to_add:
-                            print(f"  ⊗ [{dept.name}] No default fields found for key '{dept_key}'")
-                            continue
-                        
-                        # Add fields for this department
-                        for idx, field_data in enumerate(fields_to_add, 1):
-                            try:
-                                field = TrackingField(
-                                    department_id=dept.id,
-                                    field_name=field_data['name'],
-                                    field_label=field_data.get('label', field_data['name']),
-                                    field_type=field_data.get('type', 'text'),
-                                    choices=field_data.get('choices', []),
-                                    order=idx
-                                )
-                                db.session.add(field)
-                            except Exception as field_err:
-                                print(f"    ✗ Error adding field {field_data['name']}: {field_err}")
-                        
-                        db.session.commit()
-                        departments_configured += 1
-                        print(f"  ✓ [{dept.name}] Configured {len(fields_to_add)} fields")
-                        
-                    except Exception as dept_err:
-                        print(f"  ✗ Error processing department {dept.name}: {dept_err}")
-                        db.session.rollback()
+                    if dept.name not in dept_fields_map:
+                        continue
+                    
+                    existing_fields = TrackingField.query.filter_by(department_id=dept.id).count()
+                    if existing_fields > 0:
+                        print(f"  ⊙ [{dept.name}] Has {existing_fields} fields, skipping")
+                        continue
+                    
+                    fields_to_add = dept_fields_map[dept.name]
+                    for idx, field_data in enumerate(fields_to_add, 1):
+                        field = TrackingField(
+                            department_id=dept.id,
+                            field_name=field_data['name'],
+                            field_label=field_data.get('label', field_data['name']),
+                            field_type=field_data.get('type', 'text'),
+                            choices=field_data.get('choices', []),
+                            order=idx
+                        )
+                        db.session.add(field)
+                    
+                    db.session.commit()
+                    departments_configured += 1
+                    print(f"  ✓ [{dept.name}] Added {len(fields_to_add)} fields")
                 
-                print(f"✓ Default tracking fields seeded ({departments_configured} departments configured)")
-            except Exception as seed_err:
-                print(f"✗ Error during field seeding: {seed_err}")
+                print(f"✓ Seeded {departments_configured} departments")
+            except Exception as e:
+                print(f"✗ Seeding error: {e}")
                 import traceback
                 traceback.print_exc()
             
