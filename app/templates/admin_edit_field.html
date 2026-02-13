@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h1>Edit Tracking Field - {{ department.name }}</h1>
+    
+    <div style="margin: 20px 0;">
+        <a href="{{ url_for('main.admin_department_fields', dept_id=department.id) }}" style="color: #667eea; text-decoration: none;">← Back to Fields</a>
+    </div>
+    
+    <form method="POST" style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+        {{ form.hidden_tag() }}
+        
+        <div style="margin-bottom: 20px;">
+            <label for="field_label" style="display: block; font-weight: 600; margin-bottom: 5px;">Field Label (Display Name)*</label>
+            {% if form.field_label.errors %}
+                {{ form.field_label(style="width: 100%; padding: 10px; border: 2px solid #dc3545; border-radius: 4px; font-size: 14px;") }}
+                <div style="color: #dc3545; font-size: 12px; margin-top: 5px;">
+                    {% for error in form.field_label.errors %}
+                    <p style="margin: 0;">{{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.field_label(style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;") }}
+            {% endif %}
+            <small style="color: #6c757d; display: block; margin-top: 5px;">This is the label users will see</small>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label for="field_name" style="display: block; font-weight: 600; margin-bottom: 5px;">Field Name (Internal ID)*</label>
+            {% if form.field_name.errors %}
+                {{ form.field_name(style="width: 100%; padding: 10px; border: 2px solid #dc3545; border-radius: 4px; font-size: 14px;") }}
+                <div style="color: #dc3545; font-size: 12px; margin-top: 5px;">
+                    {% for error in form.field_name.errors %}
+                    <p style="margin: 0;">{{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.field_name(style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;") }}
+            {% endif %}
+            <small style="color: #6c757d; display: block; margin-top: 5px;">Use lowercase, no spaces. Example: ticket_type, system_used</small>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label for="field_type" style="display: block; font-weight: 600; margin-bottom: 5px;">Field Type*</label>
+            {% if form.field_type.errors %}
+                {{ form.field_type(style="width: 100%; padding: 10px; border: 2px solid #dc3545; border-radius: 4px; font-size: 14px;") }}
+                <div style="color: #dc3545; font-size: 12px; margin-top: 5px;">
+                    {% for error in form.field_type.errors %}
+                    <p style="margin: 0;">{{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.field_type(style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;") }}
+            {% endif %}
+            <small style="color: #6c757d; display: block; margin-top: 5px;">
+                Text: Single line input | 
+                Text Area: Multiple lines | 
+                Number: Numeric input | 
+                Date: Date picker | 
+                Dropdown: Select from options
+            </small>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                {{ form.is_required(style="margin-right: 10px;") }}
+                <span style="font-weight: 600;">Required Field</span>
+            </label>
+            <small style="color: #6c757d; display: block; margin-top: 5px;">Check if users must fill this field</small>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label for="order" style="display: block; font-weight: 600; margin-bottom: 5px;">Display Order</label>
+            {{ form.order(style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;") }}
+            <small style="color: #6c757d; display: block; margin-top: 5px;">Leave blank to keep current order</small>
+        </div>
+        
+        <div style="margin-top: 30px; display: flex; gap: 10px;">
+            {{ form.submit(style="padding: 12px 24px; background-color: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;") }}
+            <a href="{{ url_for('main.admin_department_fields', dept_id=department.id) }}" style="padding: 12px 24px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: 600;">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

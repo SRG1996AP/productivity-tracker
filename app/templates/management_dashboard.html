@@ -55,7 +55,7 @@
                 <option value="">All</option>
                 {% for d in department_stats %}
                     {% if d.name != 'Management' %}
-                    <option value=\"{{ d.id }}\">{{ d.name }}</option>
+                    <option value="{{ d.id }}">{{ d.name }}</option>
                     {% endif %}
                 {% endfor %}
             </select>

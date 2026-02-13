@@ -1,10 +1,12 @@
 from flask import Blueprint, render_template, url_for, flash, redirect, session, request, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db, bcrypt
-from app.models import User, Department, DepartmentTracking
-from app.forms import RegistrationForm, LoginForm, DepartmentTrackingForm, AddUserForm, EditUserForm
+from app.models import User, Department, DepartmentTracking, TrackingField, Grievance, GrievanceAudit, GrievanceAttachment
+from app.forms import RegistrationForm, LoginForm, DepartmentTrackingForm, DynamicDepartmentTrackingForm, AddUserForm, EditUserForm, TrackingFieldForm
 from datetime import datetime, timedelta
 from sqlalchemy import func
+import uuid
+import re
 
 # Create a Blueprint
 main = Blueprint('main', __name__)
@@ -175,22 +177,42 @@ def add_department_entry():
         flash('Your department is not configured. Please contact support.', 'danger')
         return redirect(url_for('main.department_tracking'))
     
-    form = DepartmentTrackingForm()
+    # Use dynamic form based on department configuration
+    form = DynamicDepartmentTrackingForm.create_form_for_department(user_dept)
     
-    # Remove department field since it's automatically set to user's department
     if form.validate_on_submit():
+        # Collect custom field data
+        custom_fields_data = {}
+        
+        # Get all tracking fields for this department
+        tracking_fields = TrackingField.query.filter_by(department_id=user_dept.id).all()
+        
+        # Collect custom field values from form
+        for field_def in tracking_fields:
+            if hasattr(form, field_def.field_name):
+                field_value = getattr(form, field_def.field_name).data
+                if field_value:  # Only store non-empty values
+                    custom_fields_data[field_def.field_name] = field_value
+        
         entry = DepartmentTracking(
             user_id=current_user.id,
             department_id=user_dept.id,
-            activity_description=form.activity_description.data,
-            ticket_request_type=form.ticket_request_type.data,
-            system_application=form.system_application.data,
-            priority=form.priority.data,
-            sla_tat=form.sla_tat.data,
-            tool_platform_used=form.tool_platform_used.data,
-            duration_mins=form.duration_mins.data,
-            frequency_per_day=form.frequency_per_day.data
+            activity_description=form.activity_description.data
         )
+        
+        # Only set legacy fields if they exist in the form (backward compatibility)
+        legacy_fields = ['ticket_request_type', 'system_application', 'priority', 
+                         'sla_tat', 'tool_platform_used', 'duration_mins', 'frequency_per_day']
+        
+        for field_name in legacy_fields:
+            if hasattr(form, field_name):
+                field_data = getattr(form, field_name).data
+                if field_data:  # Only set if value exists
+                    setattr(entry, field_name, field_data)
+        
+        # Store custom fields data
+        if custom_fields_data:
+            entry.set_custom_fields_data(custom_fields_data)
         
         db.session.add(entry)
         db.session.commit()
@@ -998,3 +1020,538 @@ def admin_delete_user(user_id):
     flash(f'User "{user_name}" deleted successfully!', 'success')
     return redirect(url_for('main.admin_users'))
 
+
+# --------------------------
+# Department Tracking Fields Management
+# --------------------------
+@main.route('/admin/department-fields/<int:dept_id>')
+@login_required
+def admin_department_fields(dept_id):
+    """View and manage tracking fields for a department - Admin only"""
+    if not current_user.is_admin:
+        flash('You do not have access to field management.', 'danger')
+        return redirect(url_for('main.management_dashboard'))
+    
+    department = Department.query.get_or_404(dept_id)
+    fields = TrackingField.query.filter_by(department_id=dept_id).order_by(TrackingField.order).all()
+    
+    return render_template('admin_department_fields.html', department=department, fields=fields)
+
+
+@main.route('/admin/department-fields/<int:dept_id>/add', methods=['GET', 'POST'])
+@login_required
+def admin_add_field(dept_id):
+    """Add a new tracking field for a department - Admin only"""
+    if not current_user.is_admin:
+        flash('You do not have access to field management.', 'danger')
+        return redirect(url_for('main.management_dashboard'))
+    
+    department = Department.query.get_or_404(dept_id)
+    form = TrackingFieldForm()
+    
+    if form.validate_on_submit():
+        # Check if field_name is unique for this department
+        existing = TrackingField.query.filter_by(
+            department_id=dept_id, 
+            field_name=form.field_name.data
+        ).first()
+        
+        if existing:
+            flash(f'A field with name "{form.field_name.data}" already exists for this department.', 'danger')
+            return redirect(url_for('main.admin_add_field', dept_id=dept_id))
+        
+        # Get the next order number
+        max_order = db.session.query(db.func.max(TrackingField.order)).filter_by(department_id=dept_id).scalar()
+        next_order = (max_order or 0) + 1
+        
+        field = TrackingField(
+            department_id=dept_id,
+            field_name=form.field_name.data,
+            field_type=form.field_type.data,
+            field_label=form.field_label.data,
+            is_required=form.is_required.data,
+            order=form.order.data or next_order
+        )
+        
+        db.session.add(field)
+        db.session.commit()
+        
+        flash(f'Field "{form.field_label.data}" added successfully!', 'success')
+        return redirect(url_for('main.admin_department_fields', dept_id=dept_id))
+    
+    return render_template('admin_add_field.html', form=form, department=department)
+
+
+@main.route('/admin/department-fields/edit/<int:field_id>', methods=['GET', 'POST'])
+@login_required
+def admin_edit_field(field_id):
+    """Edit a tracking field - Admin only"""
+    if not current_user.is_admin:
+        flash('You do not have access to field management.', 'danger')
+        return redirect(url_for('main.management_dashboard'))
+    
+    field = TrackingField.query.get_or_404(field_id)
+    department = field.department
+    form = TrackingFieldForm()
+    
+    if form.validate_on_submit():
+        # Check if field_name is unique for this department (excluding current field)
+        existing = TrackingField.query.filter(
+            TrackingField.department_id == field.department_id,
+            TrackingField.field_name == form.field_name.data,
+            TrackingField.id != field_id
+        ).first()
+        
+        if existing:
+            flash(f'A field with name "{form.field_name.data}" already exists for this department.', 'danger')
+            return redirect(url_for('main.admin_edit_field', field_id=field_id))
+        
+        field.field_name = form.field_name.data
+        field.field_type = form.field_type.data
+        field.field_label = form.field_label.data
+        field.is_required = form.is_required.data
+        if form.order.data:
+            field.order = form.order.data
+        
+        db.session.commit()
+        
+        flash(f'Field "{form.field_label.data}" updated successfully!', 'success')
+        return redirect(url_for('main.admin_department_fields', dept_id=field.department_id))
+    
+    if request.method == 'GET':
+        form.field_name.data = field.field_name
+        form.field_type.data = field.field_type
+        form.field_label.data = field.field_label
+        form.is_required.data = field.is_required
+        form.order.data = field.order
+    
+    return render_template('admin_edit_field.html', form=form, field=field, department=department)
+
+
+@main.route('/admin/department-fields/delete/<int:field_id>', methods=['POST'])
+@login_required
+def admin_delete_field(field_id):
+    """Delete a tracking field - Admin only"""
+    if not current_user.is_admin:
+        flash('You do not have access to field management.', 'danger')
+        return redirect(url_for('main.management_dashboard'))
+    
+    field = TrackingField.query.get_or_404(field_id)
+    dept_id = field.department_id
+    field_label = field.field_label
+    
+    db.session.delete(field)
+    db.session.commit()
+    
+    flash(f'Field "{field_label}" deleted successfully!', 'success')
+    return redirect(url_for('main.admin_department_fields', dept_id=dept_id))
+
+# --------------------------
+# Grievance Management API
+# --------------------------
+
+def generate_case_id():
+    """Generate unique case ID in format: GR-YYYYMMDD-XXXX"""
+    timestamp = datetime.utcnow().strftime('%Y%m%d')
+    random_suffix = str(uuid.uuid4().hex[:4]).upper()
+    return f"GR-{timestamp}-{random_suffix}"
+
+
+def analyze_grievance_with_ai(grievance_text):
+    """
+    AI Analysis stub for categorization, priority, and sentiment.
+    This integrates with OpenAI or a local NLP model.
+    
+    Returns: {
+        'category': str,
+        'priority': str,
+        'sentiment_score': float,
+        'flagged_keywords': list,
+        'should_escalate': bool,
+        'escalation_reason': str
+    }
+    """
+    # Deterministic keyword rules (can be enhanced with ML model)
+    sensitive_keywords = {
+        'harassment': True,
+        'bullying': True,
+        'threat': True,
+        'illegal': True,
+        'discrimination': True,
+        'resign': True,
+        'suicide': True,
+        'harm': True
+    }
+    
+    text_lower = grievance_text.lower()
+    flagged = [kw for kw in sensitive_keywords.keys() if kw in text_lower]
+    should_escalate = bool(flagged)
+    
+    # Simple category detection (rule-based; replace with ML model)
+    category = 'Others'
+    category_keywords = {
+        'Workplace Harassment': ['harassment', 'bullying', 'abuse', 'intimidation'],
+        'Payroll / Salary Issue': ['salary', 'payroll', 'payment', 'wage', 'bonus'],
+        'Supervisor Misconduct': ['supervisor', 'manager', 'boss', 'manager', 'conduct'],
+        'Discrimination': ['discrimination', 'bias', 'racist', 'sexist'],
+        'Workload Concern': ['workload', 'overwork', 'overtime', 'stress', 'pressure'],
+        'Policy Violation': ['policy', 'violation', 'breach', 'rule'],
+        'IT / System Issue': ['it', 'system', 'computer', 'software', 'access']
+    }
+    
+    for cat, keywords in category_keywords.items():
+        if any(kw in text_lower for kw in keywords):
+            category = cat
+            break
+    
+    # Simple priority assignment
+    priority = 'Low'
+    if flagged or 'urgent' in text_lower or 'critical' in text_lower:
+        priority = 'High'
+    elif 'soon' in text_lower or 'asap' in text_lower or 'immediate' in text_lower:
+        priority = 'Medium'
+    
+    # Sentiment score (simple negative word count; replace with proper sentiment model)
+    negative_words = ['bad', 'worse', 'worst', 'angry', 'upset', 'frustrated', 'disappointed']
+    negative_count = sum(1 for word in negative_words if word in text_lower)
+    sentiment_score = max(-1.0, -0.1 * negative_count)
+    
+    if flagged:
+        sentiment_score = min(sentiment_score - 0.2, -0.8)
+    
+    return {
+        'category': category,
+        'priority': priority,
+        'sentiment_score': round(sentiment_score, 2),
+        'flagged_keywords': flagged,
+        'should_escalate': should_escalate,
+        'escalation_reason': f"Keywords detected: {', '.join(flagged)}" if flagged else None
+    }
+
+
+@main.route('/api/grievances', methods=['POST'])
+def submit_grievance():
+    """
+    Submit a new grievance (public endpoint, no authentication required).
+    
+    Request JSON:
+    {
+        "employee_name": str,
+        "employee_id": str,
+        "campaign": str,
+        "contact_number": str,
+        "grievance_text": str,
+        "is_anonymous": bool (optional, default False)
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['employee_name', 'employee_id', 'campaign', 'contact_number', 'grievance_text']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'message': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+        
+        # Validate field formats
+        if not isinstance(data.get('contact_number'), str) or not re.match(r'^\d{10,}$', data['contact_number'].replace('-', '').replace(' ', '')):
+            return jsonify({
+                'success': False,
+                'message': 'Invalid contact number format (must be at least 10 digits)'
+            }), 400
+        
+        if len(data['grievance_text'].strip()) < 10:
+            return jsonify({
+                'success': False,
+                'message': 'Grievance description must be at least 10 characters'
+            }), 400
+        
+        # Generate case ID and analyze grievance
+        case_id = generate_case_id()
+        ai_analysis = analyze_grievance_with_ai(data['grievance_text'])
+        
+        # Create grievance record
+        grievance = Grievance(
+            case_id=case_id,
+            employee_name=data['employee_name'] if not data.get('is_anonymous') else 'Anonymous',
+            employee_id=data['employee_id'] if not data.get('is_anonymous') else 'ANONYMOUS',
+            campaign=data['campaign'],
+            contact_number=data['contact_number'],
+            grievance_text=data['grievance_text'],
+            is_anonymous=data.get('is_anonymous', False),
+            ai_category=ai_analysis['category'],
+            ai_priority=ai_analysis['priority'],
+            ai_sentiment_score=ai_analysis['sentiment_score'],
+            status='Open',
+            escalated_to_senior_hr=ai_analysis['should_escalate'],
+            escalation_reason=ai_analysis['escalation_reason']
+        )
+        
+        grievance.set_flagged_keywords(ai_analysis['flagged_keywords'])
+        
+        db.session.add(grievance)
+        
+        # Create initial audit entry
+        audit_entry = GrievanceAudit(
+            grievance_id=grievance.id if grievance.id else None,  # Will be set after flush
+            changed_by='System',
+            from_status=None,
+            to_status='Open',
+            remarks='Grievance submitted - AI analysis completed'
+        )
+        
+        db.session.flush()  # Ensure grievance.id is set
+        audit_entry.grievance_id = grievance.id
+        db.session.add(audit_entry)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Your grievance has been successfully submitted. Case ID: {case_id}',
+            'case_id': case_id,
+            'status': 'Open'
+        }), 201
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
+@main.route('/api/grievances', methods=['GET'])
+@login_required
+def list_grievances():
+    """
+    Retrieve grievances (HR Admin only).
+    
+    Query parameters:
+    - date_from: YYYY-MM-DD
+    - date_to: YYYY-MM-DD
+    - campaign: str
+    - status: str (Open, Under Review, etc.)
+    - priority: str (High, Medium, Low)
+    - search: employee_id or case_id
+    - page: int (default 1)
+    - per_page: int (default 20)
+    """
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied. HR Admin privilege required.'}), 403
+    
+    try:
+        # Parse filters
+        query = Grievance.query
+        
+        if request.args.get('date_from'):
+            date_from = datetime.strptime(request.args.get('date_from'), '%Y-%m-%d')
+            query = query.filter(Grievance.submitted_at >= date_from)
+        
+        if request.args.get('date_to'):
+            date_to = datetime.strptime(request.args.get('date_to'), '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(Grievance.submitted_at < date_to)
+        
+        if request.args.get('campaign'):
+            query = query.filter(Grievance.campaign == request.args.get('campaign'))
+        
+        if request.args.get('status'):
+            query = query.filter(Grievance.status == request.args.get('status'))
+        
+        if request.args.get('priority'):
+            query = query.filter(Grievance.ai_priority == request.args.get('priority'))
+        
+        if request.args.get('search'):
+            search_term = f"%{request.args.get('search')}%"
+            query = query.filter(
+                (Grievance.employee_id.ilike(search_term)) |
+                (Grievance.case_id.ilike(search_term))
+            )
+        
+        # Pagination
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        
+        paginated = query.order_by(Grievance.submitted_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        grievances_data = [{
+            'id': g.id,
+            'case_id': g.case_id,
+            'employee_name': g.employee_name,
+            'employee_id': g.employee_id,
+            'campaign': g.campaign,
+            'ai_category': g.ai_category,
+            'ai_priority': g.ai_priority,
+            'status': g.status,
+            'submitted_at': g.submitted_at.isoformat() if g.submitted_at else None,
+            'is_escalated': g.escalated_to_senior_hr
+        } for g in paginated.items]
+        
+        return jsonify({
+            'success': True,
+            'grievances': grievances_data,
+            'total': paginated.total,
+            'page': page,
+            'per_page': per_page,
+            'pages': paginated.pages
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+
+@main.route('/api/grievances/<case_id>', methods=['GET'])
+@login_required
+def view_grievance(case_id):
+    """View grievance details (HR Admin only)"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied.'}), 403
+    
+    grievance = Grievance.query.filter_by(case_id=case_id).first_or_404()
+    
+    audit_trail = [{
+        'changed_at': a.changed_at.isoformat() if a.changed_at else None,
+        'changed_by': a.changed_by,
+        'from_status': a.from_status,
+        'to_status': a.to_status,
+        'remarks': a.remarks
+    } for a in grievance.audit_entries]
+    
+    return jsonify({
+        'success': True,
+        'grievance': {
+            'id': grievance.id,
+            'case_id': grievance.case_id,
+            'employee_name': grievance.employee_name,
+            'employee_id': grievance.employee_id,
+            'campaign': grievance.campaign,
+            'contact_number': grievance.contact_number,
+            'grievance_text': grievance.grievance_text,
+            'is_anonymous': grievance.is_anonymous,
+            'ai_category': grievance.ai_category,
+            'ai_priority': grievance.ai_priority,
+            'ai_sentiment_score': grievance.ai_sentiment_score,
+            'ai_keywords_flagged': grievance.get_flagged_keywords(),
+            'status': grievance.status,
+            'hr_remarks': grievance.hr_remarks,
+            'escalated_to_senior_hr': grievance.escalated_to_senior_hr,
+            'escalation_reason': grievance.escalation_reason,
+            'submitted_at': grievance.submitted_at.isoformat() if grievance.submitted_at else None,
+            'updated_at': grievance.updated_at.isoformat() if grievance.updated_at else None,
+            'audit_trail': audit_trail
+        }
+    }), 200
+
+
+@main.route('/api/grievances/<case_id>/status', methods=['PUT'])
+@login_required
+def update_grievance_status(case_id):
+    """Update grievance status (HR Admin only)"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied.'}), 403
+    
+    grievance = Grievance.query.filter_by(case_id=case_id).first_or_404()
+    data = request.get_json()
+    
+    valid_statuses = ['Open', 'Under Review', 'Investigation in Progress', 'Escalated', 'Resolved', 'Closed']
+    if data.get('status') not in valid_statuses:
+        return jsonify({'success': False, 'message': f'Invalid status. Valid statuses: {", ".join(valid_statuses)}'}), 400
+    
+    old_status = grievance.status
+    grievance.status = data['status']
+    grievance.hr_remarks = data.get('remarks', grievance.hr_remarks)
+    grievance.updated_at = datetime.utcnow()
+    
+    audit_entry = GrievanceAudit(
+        grievance_id=grievance.id,
+        changed_by=current_user.name,
+        from_status=old_status,
+        to_status=data['status'],
+        remarks=data.get('remarks')
+    )
+    
+    db.session.add(audit_entry)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Grievance {case_id} status updated to {data["status"]}',
+        'status': grievance.status
+    }), 200
+
+
+@main.route('/api/grievances/dashboard/metrics', methods=['GET'])
+@login_required
+def grievance_dashboard_metrics():
+    """Get dashboard metrics (HR Admin only)"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied.'}), 403
+    
+    try:
+        # Total grievances by month (last 12 months)
+        twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+        monthly_totals = db.session.query(
+            func.date_trunc('month', Grievance.submitted_at).label('month'),
+            func.count(Grievance.id).label('count')
+        ).filter(Grievance.submitted_at >= twelve_months_ago).group_by('month').all()
+        
+        monthly_data = [{
+            'month': str(m[0]) if m[0] else 'Unknown',
+            'count': m[1] or 0
+        } for m in monthly_totals]
+        
+        # Status breakdown
+        status_counts = db.session.query(
+            Grievance.status,
+            func.count(Grievance.id).label('count')
+        ).group_by(Grievance.status).all()
+        
+        status_data = {s[0]: s[1] for s in status_counts}
+        
+        # Priority breakdown
+        priority_counts = db.session.query(
+            Grievance.ai_priority,
+            func.count(Grievance.id).label('count')
+        ).group_by(Grievance.ai_priority).all()
+        
+        priority_data = {p[0]: p[1] for p in priority_counts}
+        
+        # Category breakdown
+        category_counts = db.session.query(
+            Grievance.ai_category,
+            func.count(Grievance.id).label('count')
+        ).group_by(Grievance.ai_category).all()
+        
+        category_data = {c[0]: c[1] for c in category_counts}
+        
+        # Campaign breakdown
+        campaign_counts = db.session.query(
+            Grievance.campaign,
+            func.count(Grievance.id).label('count')
+        ).group_by(Grievance.campaign).all()
+        
+        campaign_data = {c[0]: c[1] for c in campaign_counts}
+        
+        return jsonify({
+            'success': True,
+            'metrics': {
+                'total_grievances': Grievance.query.count(),
+                'open_cases': Grievance.query.filter_by(status='Open').count(),
+                'resolved_cases': Grievance.query.filter_by(status='Resolved').count(),
+                'high_priority_cases': Grievance.query.filter_by(ai_priority='High').count(),
+                'escalated_cases': Grievance.query.filter_by(escalated_to_senior_hr=True).count(),
+                'monthly_totals': monthly_data,
+                'status_breakdown': status_data,
+                'priority_breakdown': priority_data,
+                'category_breakdown': category_data,
+                'campaign_breakdown': campaign_data
+            }
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500

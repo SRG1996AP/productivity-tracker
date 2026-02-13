@@ -27,59 +27,60 @@
                 <small class="form-hint">Minimum 5 characters, maximum 1000</small>
             </div>
             
-            <div class="form-row">
-                <div class="form-group">
-                    {{ form.ticket_request_type.label }}
-                    {% if form.ticket_request_type.errors %}
-                        {{ form.ticket_request_type(class="form-control error") }}
-                        <div class="error-text">
-                            {% for error in form.ticket_request_type.errors %}
-                                <p>{{ error }}</p>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        {{ form.ticket_request_type(class="form-control", placeholder="e.g., Incident, Request, Change") }}
+            <!-- Dynamic Fields Section -->
+            {% if form._fields|length > 2 %}  <!-- More than just activity_description and submit -->
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #28a745;">
+                <h3 style="margin-top: 0; margin-bottom: 15px; color: #333;">Custom Fields for {{ department.name }}</h3>
+                
+                {% for field in form %}
+                    {% if field.name not in ['activity_description', 'submit', 'csrf_token'] %}
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="{{ field.id }}" style="display: block; font-weight: 600; margin-bottom: 5px;">
+                            {{ field.label.text }}
+                            {% if field.flags.required %}
+                                <span style="color: #dc3545;">*</span>
+                            {% endif %}
+                        </label>
+                        
+                        {% if field.type == 'SelectField' %}
+                            {% if field.errors %}
+                                {{ field(class="form-control error") }}
+                            {% else %}
+                                {{ field(class="form-control") }}
+                            {% endif %}
+                        {% elif field.type == 'TextAreaField' %}
+                            {% if field.errors %}
+                                {{ field(class="form-control error", rows=4) }}
+                            {% else %}
+                                {{ field(class="form-control", rows=4) }}
+                            {% endif %}
+                        {% elif field.type == 'IntegerField' %}
+                            {% if field.errors %}
+                                {{ field(class="form-control error", type="number") }}
+                            {% else %}
+                                {{ field(class="form-control", type="number") }}
+                            {% endif %}
+                        {% else %}
+                            <!-- Text or Date fields -->
+                            {% if field.errors %}
+                                {{ field(class="form-control error") }}
+                            {% else %}
+                                {{ field(class="form-control") }}
+                            {% endif %}
+                        {% endif %}
+                        
+                        {% if field.errors %}
+                            <div class="error-text">
+                                {% for error in field.errors %}
+                                    <p>{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
                     {% endif %}
-                </div>
-                
-                <div class="form-group">
-                    {{ form.priority.label }}
-                    {% if form.priority.errors %}
-                        {{ form.priority(class="form-control error") }}
-                    {% else %}
-                        {{ form.priority(class="form-control") }}
-                    {% endif %}
-                </div>
+                {% endfor %}
             </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    {{ form.system_application.label }}
-                    {{ form.system_application(class="form-control", placeholder="System/App name") }}
-                </div>
-                
-                <div class="form-group">
-                    {{ form.tool_platform_used.label }}
-                    {{ form.tool_platform_used(class="form-control", placeholder="Tool/Platform used") }}
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    {{ form.duration_mins.label }}
-                    {{ form.duration_mins(class="form-control", type="number", placeholder="Duration in minutes") }}
-                </div>
-                
-                <div class="form-group">
-                    {{ form.frequency_per_day.label }}
-                    {{ form.frequency_per_day(class="form-control", type="number", placeholder="Frequency") }}
-                </div>
-            </div>
-            
-            <div class="form-group">
-                {{ form.sla_tat.label }}
-                {{ form.sla_tat(class="form-control", placeholder="e.g., 4 hours, 1 day") }}
-            </div>
+            {% endif %}
             
             <div class="form-actions">
                 {{ form.submit(class="btn btn-primary") }}
