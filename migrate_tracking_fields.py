@@ -6,6 +6,7 @@ Run this once before using the new custom fields feature
 
 from app import create_app, db
 from app.models import TrackingField, DepartmentTracking
+from sqlalchemy import inspect, text
 
 def upgrade():
     """Create new tables and columns"""
@@ -15,7 +16,22 @@ def upgrade():
         db.create_all()
         print("✓ Database schema updated successfully!")
         print("✓ TrackingField table created")
-        print("✓ custom_fields_data column added to DepartmentTracking")
+
+        # Add custom_fields_data column if it does not exist
+        inspector = inspect(db.engine)
+        try:
+            columns = [col["name"] for col in inspector.get_columns("department_tracking")]
+        except Exception:
+            columns = []
+
+        if "custom_fields_data" not in columns:
+            db.session.execute(
+                text("ALTER TABLE department_tracking ADD COLUMN custom_fields_data TEXT")
+            )
+            db.session.commit()
+            print("✓ custom_fields_data column added to DepartmentTracking")
+        else:
+            print("✓ custom_fields_data column already exists")
 
 if __name__ == '__main__':
     upgrade()

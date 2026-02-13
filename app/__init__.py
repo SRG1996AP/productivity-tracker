@@ -19,8 +19,11 @@ def create_app():
     if database_url and database_url.startswith('postgres://'):
         # Fix PostgreSQL URL scheme for SQLAlchemy 1.4+
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///site.db'
+
+    # Use instance directory for SQLite by default (consistent local path)
+    os.makedirs(app.instance_path, exist_ok=True)
+    default_sqlite_path = os.path.join(app.instance_path, 'site.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url or f"sqlite:///{default_sqlite_path}"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Environment-based settings

@@ -4,7 +4,8 @@ Script to initialize the database with departments from the Excel file.
 """
 
 from app import create_app, db
-from app.models import Department
+from app.models import Department, TrackingField
+from default_tracking_fields import get_default_tracking_fields_by_key, match_department_key
 
 # Department data from the Excel file
 DEPARTMENTS = [
@@ -60,10 +61,30 @@ def init_db():
             print(f"Database already has {len(existing_depts)} departments. Skipping initialization.")
             return
         
+        defaults = get_default_tracking_fields_by_key()
+
         # Add departments
         for dept_data in DEPARTMENTS:
             dept = Department(**dept_data)
             db.session.add(dept)
+            db.session.flush()
+
+            key = match_department_key(dept.name)
+            if key:
+                fields = defaults.get(key, [])
+                for order_index, field_def in enumerate(fields, start=1):
+                    field = TrackingField(
+                        department_id=dept.id,
+                        field_name=field_def["name"],
+                        field_label=field_def["label"],
+                        field_type=field_def["type"],
+                        is_required=False,
+                        order=order_index,
+                    )
+                    if field_def.get("choices"):
+                        field.set_choices(field_def["choices"])
+                    db.session.add(field)
+
             print(f"Added department: {dept.name}")
         
         db.session.commit()

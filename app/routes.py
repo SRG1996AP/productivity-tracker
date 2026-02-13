@@ -179,16 +179,118 @@ def add_department_entry():
     
     # Use dynamic form based on department configuration
     form = DynamicDepartmentTrackingForm.create_form_for_department(user_dept)
+
+    today = datetime.utcnow().date()
+    dept_entries = DepartmentTracking.query.filter(
+        DepartmentTracking.department_id == user_dept.id
+    ).order_by(DepartmentTracking.date_logged.desc())
+
+    today_entries = DepartmentTracking.query.filter(
+        DepartmentTracking.department_id == user_dept.id,
+        func.date(DepartmentTracking.date_logged) == today
+    ).all()
+
+    total_entries = dept_entries.count()
+    activity_no = total_entries + 1
+
+    def _parse_sla(sla_value):
+        if not sla_value:
+            return None
+        digits = re.findall(r"\d+", str(sla_value))
+        if not digits:
+            return None
+        try:
+            return int(digits[0])
+        except ValueError:
+            return None
+
+    high_priority_count = sum(
+        1 for entry in today_entries
+        if (entry.priority or "").lower() in ["high", "urgent"]
+    )
+    sla_breached_count = sum(
+        1 for entry in today_entries
+        if entry.duration_mins
+        and _parse_sla(entry.sla_tat)
+        and entry.duration_mins > _parse_sla(entry.sla_tat)
+    )
+
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    filter_priority = request.args.get("priority")
+    filter_status = request.args.get("status")
+
+    history_entries = dept_entries.limit(100).all()
+
+    def _within_date_range(entry_date):
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+                if entry_date < from_date:
+                    return False
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+                if entry_date > to_date:
+                    return False
+            except ValueError:
+                pass
+        return True
+
+    def _get_output(custom_data):
+        for key in ["output_report", "output_evidence", "output_scorecard"]:
+            value = custom_data.get(key)
+            if value:
+                return value
+        return "-"
+
+    history_rows = []
+    for entry in history_entries:
+        if not _within_date_range(entry.date_logged.date()):
+            continue
+        if filter_priority and (entry.priority or "").lower() != filter_priority.lower():
+            continue
+
+        custom_data = entry.get_custom_fields_data()
+        status_value = custom_data.get("status") or "-"
+        if filter_status and status_value.lower() != filter_status.lower():
+            continue
+
+        history_rows.append({
+            "id": entry.id,
+            "date_logged": entry.date_logged,
+            "description": entry.activity_description,
+            "priority": entry.priority,
+            "duration_mins": entry.duration_mins,
+            "status": status_value,
+            "output": _get_output(custom_data),
+            "remarks": custom_data.get("remarks") or "-",
+        })
     
     if form.validate_on_submit():
+        # Only set legacy fields if they exist in the form (backward compatibility)
+        legacy_fields = [
+            'ticket_request_type',
+            'system_application',
+            'priority',
+            'sla_tat',
+            'tool_platform_used',
+            'duration_mins',
+            'frequency_per_day'
+        ]
+
         # Collect custom field data
         custom_fields_data = {}
-        
+
         # Get all tracking fields for this department
         tracking_fields = TrackingField.query.filter_by(department_id=user_dept.id).all()
         
         # Collect custom field values from form
         for field_def in tracking_fields:
+            if field_def.field_name in legacy_fields:
+                continue
             if hasattr(form, field_def.field_name):
                 field_value = getattr(form, field_def.field_name).data
                 if field_value:  # Only store non-empty values
@@ -199,10 +301,6 @@ def add_department_entry():
             department_id=user_dept.id,
             activity_description=form.activity_description.data
         )
-        
-        # Only set legacy fields if they exist in the form (backward compatibility)
-        legacy_fields = ['ticket_request_type', 'system_application', 'priority', 
-                         'sla_tat', 'tool_platform_used', 'duration_mins', 'frequency_per_day']
         
         for field_name in legacy_fields:
             if hasattr(form, field_name):
@@ -220,7 +318,22 @@ def add_department_entry():
         flash('Activity logged successfully!', 'success')
         return redirect(url_for('main.department_tracking'))
     
-    return render_template('add_department_entry.html', form=form, department=user_dept)
+    return render_template(
+        'add_department_entry.html',
+        form=form,
+        department=user_dept,
+        activity_no=activity_no,
+        current_date=today.strftime('%Y-%m-%d'),
+        today_entries=today_entries,
+        total_entries=total_entries,
+        high_priority_count=high_priority_count,
+        sla_breached_count=sla_breached_count,
+        history_rows=history_rows,
+        filter_priority=filter_priority,
+        filter_status=filter_status,
+        filter_date_from=date_from,
+        filter_date_to=date_to,
+    )
 
 
 # --------------------------
@@ -1150,7 +1263,22 @@ def admin_delete_field(field_id):
 # Grievance Management API
 # --------------------------
 
-def generate_case_id():
+@main.route('/submit-grievance')
+def submit_grievance_form():
+    """Display grievance submission form (public page)"""
+    return render_template('submit_grievance.html')
+
+
+@main.route('/grievance-dashboard')
+@login_required
+def grievance_dashboard():
+    """Display HR grievance management dashboard"""
+    if not current_user.is_admin:
+        flash('Access denied. HR Admin privilege required.', 'danger')
+        return redirect(url_for('main.index'))
+    return render_template('grievance_dashboard.html')
+
+
     """Generate unique case ID in format: GR-YYYYMMDD-XXXX"""
     timestamp = datetime.utcnow().strftime('%Y%m%d')
     random_suffix = str(uuid.uuid4().hex[:4]).upper()
@@ -1229,8 +1357,7 @@ def analyze_grievance_with_ai(grievance_text):
     }
 
 
-@main.route('/api/grievances', methods=['POST'])
-def submit_grievance():
+def analyze_grievance_with_ai(grievance_text):
     """
     Submit a new grievance (public endpoint, no authentication required).
     

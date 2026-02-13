@@ -1,0 +1,70 @@
+{% macro section_card(title, subtitle, icon_svg) -%}
+<details class="pt-card pt-collapsible" open>
+    <summary class="pt-card-header">
+        <span class="pt-card-icon" aria-hidden="true">
+            {{ icon_svg | safe }}
+        </span>
+        <div class="pt-card-title">
+            <h2>{{ title }}</h2>
+            {% if subtitle %}
+            <p>{{ subtitle }}</p>
+            {% endif %}
+        </div>
+        <span class="pt-card-toggle" aria-hidden="true">Toggle</span>
+    </summary>
+    <div class="pt-card-body">
+        {{ caller() }}
+    </div>
+</details>
+{%- endmacro %}
+
+{% macro render_readonly(label, value, helper="") -%}
+<div class="pt-field">
+    <label class="pt-label">{{ label }}</label>
+    <div class="pt-readonly">{{ value }}</div>
+    {% if helper %}
+    <div class="pt-helper">{{ helper }}</div>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+{% macro render_field(field, input_class="pt-input", helper="", rows=4) -%}
+<div class="pt-field">
+    <label for="{{ field.id }}" class="pt-label">
+        {{ field.label.text }}
+        {% if field.flags.required %}
+            <span class="pt-required">*</span>
+        {% endif %}
+    </label>
+    {% if field.type == 'SelectField' %}
+        {{ field(class=input_class) }}
+    {% elif field.type == 'TextAreaField' %}
+        {{ field(class=input_class, rows=rows) }}
+    {% elif field.type == 'IntegerField' %}
+        {{ field(class=input_class, type="number") }}
+    {% else %}
+        {{ field(class=input_class) }}
+    {% endif %}
+    {% if helper %}
+    <div class="pt-helper">{{ helper }}</div>
+    {% endif %}
+    {% if field.errors %}
+    <div class="pt-error">
+        {% for error in field.errors %}
+            <p>{{ error }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+{% macro render_field_by_name(form, field_name, input_class="pt-input", helper="") -%}
+{% if field_name in form._fields %}
+    {% set field = form[field_name] %}
+    {{ render_field(field, input_class=input_class, helper=helper) }}
+{% endif %}
+{%- endmacro %}
+
+{% macro render_badge(text, tone="neutral") -%}
+<span class="pt-badge pt-badge-{{ tone }}">{{ text }}</span>
+{%- endmacro %}

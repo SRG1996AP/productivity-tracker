@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .grievance-container {
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 30px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .grievance-header {
+        text-align: center;
+        margin-bottom: 30px;
+        border-bottom: 3px solid #dc3545;
+        padding-bottom: 15px;
+    }
+
+    .grievance-header h1 {
+        color: #333;
+        font-size: 28px;
+        margin: 0;
+    }
+
+    .grievance-header p {
+        color: #666;
+        font-size: 14px;
+        margin-top: 8px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 500;
+        font-size: 14px;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="email"],
+    .form-group input[type="tel"],
+    .form-group textarea,
+    .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        box-sizing: border-box;
+        transition: border-color 0.3s;
+    }
+
+    .form-group input[type="text"]:focus,
+    .form-group input[type="email"]:focus,
+    .form-group input[type="tel"]:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #dc3545;
+        box-shadow: 0 0 5px rgba(220, 53, 69, 0.2);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 150px;
+    }
+
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+    }
+
+    .anonymous-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .anonymous-checkbox input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .anonymous-checkbox label {
+        margin: 0;
+        font-weight: normal;
+        cursor: pointer;
+    }
+
+    .help-text {
+        color: #666;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 30px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-weight: 500;
+    }
+
+    .btn-primary {
+        background-color: #dc3545;
+        color: white;
+        flex: 1;
+    }
+
+    .btn-primary:hover {
+        background-color: #c82333;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+        flex: 1;
+    }
+
+    .btn-secondary:hover {
+        background-color: #5a6268;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .success-message {
+        display: none;
+        padding: 20px;
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+
+    .success-message.show {
+        display: block;
+    }
+
+    .error-message {
+        padding: 12px;
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+
+    .case-id-display {
+        font-family: monospace;
+        background-color: #f8f9fa;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #dc3545;
+    }
+
+    .info-banner {
+        background-color: #e7f3ff;
+        border-left: 4px solid #2196F3;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+
+    .info-banner p {
+        margin: 0;
+        color: #0c5aa0;
+        font-size: 14px;
+    }
+
+    .loading {
+        display: none;
+    }
+
+    .spinner {
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #dc3545;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+        margin-right: 8px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+
+<div class="grievance-container">
+    <div class="grievance-header">
+        <h1>Employee Grievance Submission</h1>
+        <p>Submit your workplace concerns confidentially</p>
+    </div>
+
+    <div class="info-banner">
+        <p><strong>📋 Confidentiality Notice:</strong> All grievances are handled with utmost confidentiality. You may submit anonymously if preferred. Our HR team will review and respond to your grievance promptly.</p>
+    </div>
+
+    <form id="grievanceForm">
+        <div id="successMessage" class="success-message">
+            <h5>Grievance Successfully Submitted!</h5>
+            <p>Your grievance has been received. <strong>Your Case ID is:</strong></p>
+            <p class="case-id-display" id="caseIdDisplay"></p>
+            <p style="margin-top: 10px; font-size: 12px;">Please save this case ID for your records. You can use it to track the status of your grievance.</p>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+        <!-- Employee Name -->
+        <div class="form-group">
+            <label for="employeeName" class="required-field">Full Name</label>
+            <input type="text" id="employeeName" name="employeeName" placeholder="Enter your full name" required>
+            <div class="help-text">Your name as it appears in employee records</div>
+        </div>
+
+        <!-- Employee ID -->
+        <div class="form-group">
+            <label for="employeeId" class="required-field">Employee ID</label>
+            <input type="text" id="employeeId" name="employeeId" placeholder="e.g., EMP001234" required>
+            <div class="help-text">Your unique employee identification number</div>
+        </div>
+
+        <!-- Campaign / Department -->
+        <div class="form-group">
+            <label for="campaign" class="required-field">Department / Team</label>
+            <select id="campaign" name="campaign" required>
+                <option value="">-- Select Department --</option>
+                <option value="HR Department">HR Department</option>
+                <option value="Sales Department">Sales Department</option>
+                <option value="Finance Department">Finance Department</option>
+                <option value="IT Department">IT Department</option>
+                <option value="Operations">Operations</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Customer Support">Customer Support</option>
+                <option value="Other">Other</option>
+            </select>
+            <div class="help-text">Select your department or team</div>
+        </div>
+
+        <!-- Contact Number -->
+        <div class="form-group">
+            <label for="contactNumber" class="required-field">Contact Number</label>
+            <input type="tel" id="contactNumber" name="contactNumber" placeholder="e.g., 98765-43210" pattern="[\d\-\s]+" required>
+            <div class="help-text">A valid phone number where we can reach you</div>
+        </div>
+
+        <!-- Grievance Description -->
+        <div class="form-group">
+            <label for="grievanceText" class="required-field">Describe Your Grievance</label>
+            <textarea id="grievanceText" name="grievanceText" placeholder="Please describe your concern in detail. Include dates, people involved, and specific incidents." required></textarea>
+            <div class="help-text">Provide as much detail as possible to help us understand your concern (minimum 10 characters)</div>
+        </div>
+
+        <!-- Anonymous Toggle -->
+        <div class="anonymous-checkbox">
+            <input type="checkbox" id="isAnonymous" name="isAnonymous" value="true">
+            <label for="isAnonymous">Submit this grievance anonymously</label>
+        </div>
+        <div class="help-text" style="margin-bottom: 20px;">If checked, your identity will be protected in all communications</div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                <span class="loading">
+                    <div class="spinner"></div>Submitting...
+                </span>
+                <span class="default-text">Submit Grievance</span>
+            </button>
+            <button type="reset" class="btn btn-secondary" onclick="resetForm()">Clear Form</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const form = document.getElementById('grievanceForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const successMsg = document.getElementById('successMessage');
+    const errorMsg = document.getElementById('errorMessage');
+    const loadingSpan = submitBtn.querySelector('.loading');
+    const defaultText = submitBtn.querySelector('.default-text');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // Clear previous messages
+        successMsg.classList.remove('show');
+        errorMsg.style.display = 'none';
+        errorMsg.textContent = '';
+
+        // Collect form data
+        const formData = {
+            employee_name: document.getElementById('employeeName').value,
+            employee_id: document.getElementById('employeeId').value,
+            campaign: document.getElementById('campaign').value,
+            contact_number: document.getElementById('contactNumber').value,
+            grievance_text: document.getElementById('grievanceText').value,
+            is_anonymous: document.getElementById('isAnonymous').checked
+        };
+
+        // Validate
+        if (formData.grievance_text.length < 10) {
+            showError('Grievance description must be at least 10 characters long.');
+            return;
+        }
+
+        // Show loading
+        loadingSpan.style.display = 'inline-block';
+        defaultText.style.display = 'none';
+        submitBtn.disabled = true;
+
+        try {
+            const response = await fetch('/api/grievances', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                // Success
+                document.getElementById('caseIdDisplay').textContent = result.case_id;
+                successMsg.classList.add('show');
+                form.style.display = 'none';
+                
+                // Scroll to success message
+                successMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                // Error from server
+                showError(result.message || 'An error occurred while submitting your grievance.');
+            }
+        } catch (error) {
+            showError('Unable to connect to server. Please check your internet connection and try again.');
+            console.error('Error:', error);
+        } finally {
+            // Hide loading
+            loadingSpan.style.display = 'none';
+            defaultText.style.display = 'inline';
+            submitBtn.disabled = false;
+        }
+    });
+
+    function showError(message) {
+        errorMsg.textContent = message;
+        errorMsg.style.display = 'block';
+        errorMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function resetForm() {
+        form.reset();
+        successMsg.classList.remove('show');
+        errorMsg.style.display = 'none';
+        form.style.display = 'block';
+    }
+
+    // Auto-format phone number
+    document.getElementById('contactNumber').addEventListener('input', (e) => {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 0) {
+            if (value.length <= 5) {
+                e.target.value = value;
+            } else if (value.length <= 10) {
+                e.target.value = value.substring(0, 5) + '-' + value.substring(5);
+            } else {
+                e.target.value = value.substring(0, 5) + '-' + value.substring(5, 10) + '-' + value.substring(10, 15);
+            }
+        }
+    });
+</script>
+
+{% endblock %}

@@ -1,204 +1,308 @@
 {% extends "base.html" %}
+{% from "_productivity_form.html" import section_card, render_field, render_field_by_name, render_readonly, render_badge %}
 
 {% block content %}
-<div class="add-entry-container">
-    <h1>Log Activity for {{ department.name }}</h1>
-    
-    <div class="form-card">
-        <div style="background-color: #e7f3ff; border-left: 4px solid #667eea; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
-            <p><strong>📋 Department:</strong> {{ department.name }}</p>
+<div class="pt-page">
+    <header class="pt-page-header">
+        <div>
+            <p class="pt-eyebrow">Productivity Tracking</p>
+            <h1>{{ department.name }} Activity Log</h1>
+            <p class="pt-subtitle">Structured, auditable, and optimized for daily execution.</p>
         </div>
-        
-        <form method="POST" class="entry-form">
-            {{ form.hidden_tag() }}
-            
-            <!-- Activity Description (Always Required) -->
-            <div class="form-group">
-                <label for="activity_description" style="display: block; font-weight: 600; margin-bottom: 8px; color: #333;">
-                    Activity Description <span style="color: #dc3545;">*</span>
-                </label>
-                {% if form.activity_description.errors %}
-                    {{ form.activity_description(class="form-control error", rows=5, placeholder="Describe the activity you performed...") }}
-                    <div class="error-text">
-                        {% for error in form.activity_description.errors %}
-                            <p>{{ error }}</p>
+        <div class="pt-header-actions">
+            <a class="btn btn-secondary" href="{{ url_for('main.department_tracking') }}">Back to Dashboard</a>
+        </div>
+    </header>
+
+    <section class="pt-summary">
+        <div class="pt-summary-card">
+            <p>Total Activities Today</p>
+            <h3>{{ today_entries|length }}</h3>
+        </div>
+        <div class="pt-summary-card">
+            <p>High Priority Count</p>
+            <h3>{{ high_priority_count }}</h3>
+        </div>
+        <div class="pt-summary-card">
+            <p>SLA Breached Count</p>
+            <h3>{{ sla_breached_count }}</h3>
+        </div>
+    </section>
+
+    <section class="pt-card pt-filter">
+        <div>
+            <h2>Activity History</h2>
+            <p>Filter recent entries by date, priority, or status.</p>
+        </div>
+        <form method="GET" class="pt-filter-form">
+            <div class="pt-grid pt-grid-4">
+                <div class="pt-field">
+                    <label class="pt-label" for="date_from">From</label>
+                    <input class="pt-input" type="date" id="date_from" name="date_from" value="{{ filter_date_from or '' }}">
+                </div>
+                <div class="pt-field">
+                    <label class="pt-label" for="date_to">To</label>
+                    <input class="pt-input" type="date" id="date_to" name="date_to" value="{{ filter_date_to or '' }}">
+                </div>
+                <div class="pt-field">
+                    <label class="pt-label" for="priority">Priority</label>
+                    <select class="pt-input" id="priority" name="priority">
+                        <option value="">All</option>
+                        {% for option in ['Low', 'Medium', 'High', 'Urgent'] %}
+                        <option value="{{ option }}" {% if filter_priority == option %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}
-                    </div>
-                {% else %}
-                    {{ form.activity_description(class="form-control", rows=5, placeholder="Describe the activity you performed...") }}
-                {% endif %}
-                <small class="form-hint">Minimum 5 characters, maximum 1000</small>
+                    </select>
+                </div>
+                <div class="pt-field">
+                    <label class="pt-label" for="status">Status</label>
+                    <select class="pt-input" id="status" name="status">
+                        <option value="">All</option>
+                        {% for option in ['Completed', 'In Progress', 'Pending', 'Escalated'] %}
+                        <option value="{{ option }}" {% if filter_status == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
-            
-            <!-- Custom Fields Section -->
-            {% set custom_field_count = form._fields|length - 3 %}
-            {% if custom_field_count > 0 %}
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #28a745;">
-                <h3 style="margin-top: 0; margin-bottom: 15px; color: #333;">Custom Fields for {{ department.name }}</h3>
-                
-                {% for field in form %}
-                    {% if field.name not in ['activity_description', 'submit', 'csrf_token'] %}
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label for="{{ field.id }}" style="display: block; font-weight: 600; margin-bottom: 8px; color: #333;">
-                            {{ field.label.text }}
-                            {% if field.flags.required %}
-                                <span style="color: #dc3545;">*</span>
-                            {% endif %}
-                        </label>
-                        
-                        {% if field.type == 'SelectField' %}
-                            {{ field(class="form-control") }}
-                        {% elif field.type == 'TextAreaField' %}
-                            {{ field(class="form-control", rows=4) }}
-                        {% elif field.type == 'IntegerField' %}
-                            {{ field(class="form-control", type="number") }}
-                        {% else %}
-                            <!-- Text or Date fields -->
-                            {{ field(class="form-control") }}
-                        {% endif %}
-                        
-                        {% if field.errors %}
-                            <div class="error-text">
-                                {% for error in field.errors %}
-                                    <p>{{ error }}</p>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-            {% else %}
-            <div style="background-color: #e8f5e9; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #4caf50; color: #2e7d32;">
-                <p style="margin: 0;"><strong>ℹ️ No custom fields configured yet.</strong> Admin can add fields from <strong>User Management → Manage Tracking Fields</strong></p>
-            </div>
-            {% endif %}
-            
-            <div class="form-actions">
-                {{ form.submit(class="btn btn-primary") }}
-                <a href="{{ url_for('main.department_tracking') }}" class="btn btn-secondary">Cancel</a>
+            <div class="pt-filter-actions">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a class="btn btn-secondary" href="{{ url_for('main.add_department_entry') }}">Reset</a>
+                <button type="button" class="btn btn-outline">Export to Excel</button>
             </div>
         </form>
-    </div>
+    </section>
+
+    <form method="POST" class="pt-form">
+        {{ form.hidden_tag() }}
+
+        {% set known_fields = [
+            'priority', 'sla_tat', 'campaign_account', 'team_agent_group',
+            'supporting_campaign_project', 'campaign_process_audited',
+            'financial_area', 'hiring_project_campaign', 'hr_process_area',
+            'system_application', 'ops_business_requirement', 'ops_client_requirement',
+            'ops_employee_requirement', 'client_ops_requirement', 'ticket_request_type',
+            'tool_platform_used', 'tool_crm_telephony_used', 'report_name',
+            'training_program_batch', 'training_type', 'audit_type',
+            'transaction_type', 'position_role', 'request_type',
+            'policy_sop_reference', 'duration_mins', 'frequency_per_day',
+            'status', 'output_report', 'output_evidence', 'output_scorecard',
+            'remarks'
+        ] %}
+
+        {% call section_card(
+            'Activity Information',
+            'Auto-filled details for traceability and SLA alignment.',
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><path d="M7 3v18"/></svg>'
+        ) %}
+        <div class="pt-grid pt-grid-2">
+            {{ render_readonly('Activity No', activity_no) }}
+            {{ render_readonly('Department', department.name) }}
+            {{ render_readonly('Date', current_date) }}
+            <div class="pt-field">
+                <label class="pt-label">Employee Name</label>
+                <div class="pt-readonly" aria-disabled="true">{{ current_user.name }}</div>
+            </div>
+            {{ render_field_by_name(form, 'priority', input_class='pt-input pt-priority-select') }}
+            {{ render_field_by_name(form, 'sla_tat') }}
+        </div>
+        {% endcall %}
+
+        {% call section_card(
+            'Activity Details',
+            'Capture the operational context and purpose of the activity.',
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h6"/></svg>'
+        ) %}
+        <div class="pt-grid pt-grid-2">
+            {{ render_field_by_name(form, 'campaign_account') }}
+            {{ render_field_by_name(form, 'team_agent_group') }}
+            {{ render_field_by_name(form, 'supporting_campaign_project') }}
+            {{ render_field_by_name(form, 'campaign_process_audited') }}
+            {{ render_field_by_name(form, 'financial_area') }}
+            {{ render_field_by_name(form, 'hiring_project_campaign') }}
+            {{ render_field_by_name(form, 'hr_process_area') }}
+            {{ render_field_by_name(form, 'system_application') }}
+            {{ render_field_by_name(form, 'ops_business_requirement') }}
+            {{ render_field_by_name(form, 'ops_client_requirement') }}
+            {{ render_field_by_name(form, 'ops_employee_requirement') }}
+            {{ render_field_by_name(form, 'client_ops_requirement') }}
+            {{ render_field_by_name(form, 'ticket_request_type') }}
+            {{ render_field_by_name(form, 'tool_platform_used') }}
+            {{ render_field_by_name(form, 'tool_crm_telephony_used') }}
+            {{ render_field_by_name(form, 'report_name') }}
+            {{ render_field_by_name(form, 'training_program_batch') }}
+            {{ render_field_by_name(form, 'training_type') }}
+            {{ render_field_by_name(form, 'audit_type') }}
+            {{ render_field_by_name(form, 'transaction_type') }}
+            {{ render_field_by_name(form, 'position_role') }}
+            {{ render_field_by_name(form, 'request_type') }}
+            {{ render_field_by_name(form, 'policy_sop_reference') }}
+        </div>
+        <div class="pt-field pt-field-full">
+            {{ render_field(form.activity_description, helper='Minimum 5 characters. Max 1000.', rows=6) }}
+            <div class="pt-counter" data-counter>0/1000</div>
+        </div>
+        {% endcall %}
+
+        {% call section_card(
+            'Productivity & Metrics',
+            'Quantify effort, output, and outcomes for reporting.',
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 20h16M6 16v-6M12 16V8M18 16v-3"/></svg>'
+        ) %}
+        <div class="pt-grid pt-grid-2">
+            {{ render_field_by_name(form, 'duration_mins', helper='Auto-highlight if duration exceeds SLA.') }}
+            {{ render_field_by_name(form, 'frequency_per_day') }}
+            {{ render_field_by_name(form, 'status') }}
+            {{ render_field_by_name(form, 'output_report') }}
+            {{ render_field_by_name(form, 'output_evidence') }}
+            {{ render_field_by_name(form, 'output_scorecard') }}
+            {{ render_field_by_name(form, 'remarks') }}
+        </div>
+        <div class="pt-alert" id="sla-alert" hidden>
+            <span class="pt-alert-icon">!</span>
+            <span>Duration exceeds SLA/TAT. Please review or add a justification in remarks.</span>
+        </div>
+        {% endcall %}
+
+        {% set ns = namespace(has_extra=false) %}
+        {% for field in form %}
+            {% if field.name not in ['activity_description', 'submit', 'csrf_token'] and field.name not in known_fields %}
+                {% set ns.has_extra = true %}
+            {% endif %}
+        {% endfor %}
+
+        {% if ns.has_extra %}
+        <section class="pt-card">
+            <div class="pt-card-header-static">
+                <div>
+                    <h2>Additional Fields</h2>
+                    <p>Custom fields added by admins appear here.</p>
+                </div>
+            </div>
+            <div class="pt-card-body">
+                <div class="pt-grid pt-grid-2">
+                    {% for field in form %}
+                        {% if field.name not in ['activity_description', 'submit', 'csrf_token'] and field.name not in known_fields %}
+                            {{ render_field(field) }}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        <div class="pt-actions">
+            <button type="button" class="btn btn-outline">Save Draft</button>
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
+
+    <section class="pt-card">
+        <div class="pt-card-header-static">
+            <div>
+                <h2>Activity History</h2>
+                <p>Recent activity submissions for {{ department.name }}.</p>
+            </div>
+        </div>
+        <div class="pt-table-wrapper">
+            <table class="pt-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Activity</th>
+                        <th>Priority</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th>Output</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if history_rows %}
+                        {% for entry in history_rows %}
+                        <tr>
+                            <td>{{ entry.date_logged.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ entry.description[:60] }}{% if entry.description|length > 60 %}...{% endif %}</td>
+                            <td>
+                                {% if entry.priority %}
+                                    {{ render_badge(entry.priority, entry.priority.lower()) }}
+                                {% else %}
+                                    {{ render_badge('None', 'none') }}
+                                {% endif %}
+                            </td>
+                            <td>{{ entry.duration_mins or '-' }}</td>
+                            <td>{{ entry.status }}</td>
+                            <td>{{ entry.output }}</td>
+                            <td>{{ entry.remarks }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="pt-empty">No activity records found.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 </div>
 
-<style>
-.add-entry-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
-}
+<script>
+const descriptionField = document.getElementById('activity_description');
+const counter = document.querySelector('[data-counter]');
+const durationField = document.getElementById('duration_mins');
+const slaField = document.getElementById('sla_tat');
+const slaAlert = document.getElementById('sla-alert');
+const priorityField = document.getElementById('priority');
 
-.form-card {
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 30px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
+const updateCounter = () => {
+    if (!descriptionField || !counter) return;
+    const max = 1000;
+    const current = descriptionField.value.length;
+    counter.textContent = `${current}/${max}`;
+};
 
-.form-group {
-    margin-bottom: 20px;
-}
+const parseNumber = (value) => {
+    const match = String(value || '').match(/\d+/);
+    return match ? parseInt(match[0], 10) : null;
+};
 
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    color: #333;
-    font-size: 14px;
-}
-
-.form-control {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    font-family: Arial, sans-serif;
-    box-sizing: border-box;
-    transition: border-color 0.3s ease;
-}
-
-.form-control:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.form-control.error {
-    border-color: #dc3545;
-}
-
-.form-control.error:focus {
-    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
-}
-
-.error-text {
-    color: #dc3545;
-    font-size: 12px;
-    margin-top: 5px;
-}
-
-.error-text p {
-    margin: 3px 0;
-}
-
-.form-hint {
-    display: block;
-    color: #6c757d;
-    font-size: 12px;
-    margin-top: 5px;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
-
-.form-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 30px;
-}
-
-.btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    display: inline-block;
-}
-
-.btn-primary {
-    background-color: #667eea;
-    color: white;
-}
-
-.btn-primary:hover {
-    background-color: #5568d3;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.btn-secondary {
-    background-color: #6c757d;
-    color: white;
-}
-
-.btn-secondary:hover {
-    background-color: #5a6268;
-}
-
-@media (max-width: 600px) {
-    .form-row {
-        grid-template-columns: 1fr;
+const checkSla = () => {
+    if (!durationField || !slaField || !slaAlert) return;
+    const duration = parseNumber(durationField.value);
+    const sla = parseNumber(slaField.value);
+    if (duration && sla && duration > sla) {
+        slaAlert.hidden = false;
+        durationField.classList.add('pt-input-warning');
+    } else {
+        slaAlert.hidden = true;
+        durationField.classList.remove('pt-input-warning');
     }
+};
+
+const updatePriorityTone = () => {
+    if (!priorityField) return;
+    const value = (priorityField.value || '').toLowerCase();
+    priorityField.dataset.tone = value;
+};
+
+if (descriptionField) {
+    descriptionField.setAttribute('maxlength', '1000');
+    descriptionField.addEventListener('input', updateCounter);
+    updateCounter();
 }
-</style>
+
+if (durationField) {
+    durationField.addEventListener('input', checkSla);
+}
+
+if (slaField) {
+    slaField.addEventListener('input', checkSla);
+}
+
+if (priorityField) {
+    priorityField.addEventListener('change', updatePriorityTone);
+    updatePriorityTone();
+}
+
+checkSla();
+</script>
 {% endblock %}
